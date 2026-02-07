@@ -10,7 +10,17 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Start the AWS Amplify Sandbox
+   
+   This command will deploy your backend resources to a cloud sandbox and generate the `amplify_outputs.json` file required for authentication. Keep this terminal running during development.
+
+   ```bash
+   npm run amplify:sandbox
+   ```
+
+3. Start the app
+
+   Open a new terminal window and run:
 
    ```bash
    npx expo start

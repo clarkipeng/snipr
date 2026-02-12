@@ -6,12 +6,10 @@ import { defineAuth } from '@aws-amplify/backend';
  */
 export const auth = defineAuth({
   loginWith: {
-    email: true,
-    // externalProviders: {
-    //   google: {
-    //     clientId: 'YOUR_GOOGLE_CLIENT_ID',
-    //     clientSecret: 'YOUR_GOOGLE_CLIENT_SECRET',
-    //   },
+    // phone: {
+    //   otpLogin: true,
     // },
+    email: true,
+    // phone: true,
   },
 });

@@ -39,7 +39,13 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Snipr to access your camera to snip targets."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

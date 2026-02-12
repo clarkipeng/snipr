@@ -7,11 +7,27 @@ specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
-  Todo: a
+  UserProfile: a
     .model({
-      content: a.string(),
+      name: a.string().required(),
+      email: a.string().required(),
+      profilePicture: a.string(),
+      friends: a.hasMany('Friendship', 'userId'),
     })
-    .authorization((allow) => [allow.guest()]),
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read']),
+    ]),
+
+  Friendship: a
+    .model({
+      userId: a.id().required(),
+      friendId: a.string().required(),
+      user: a.belongsTo('UserProfile', 'userId'),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -19,7 +35,7 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'identityPool',
+    defaultAuthorizationMode: 'userPool',
   },
 });
 
@@ -28,7 +44,7 @@ Go to your frontend source code. From your client-side code, generate a
 Data client to make CRUDL requests to your table. (THIS SNIPPET WILL ONLY
 WORK IN THE FRONTEND CODE FILE.)
 
-Using JavaScript or Next.js React Server Components, Middleware, Server 
+Using JavaScript or Next.js React Server Components, Middleware, Server
 Actions or Pages Router? Review how to generate Data clients for those use
 cases: https://docs.amplify.aws/gen2/build-a-backend/data/connect-to-API/
 =========================================================================*/

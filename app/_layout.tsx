@@ -1,3 +1,4 @@
+import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -7,8 +8,6 @@ import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Authenticator } from '@aws-amplify/ui-react-native';
-
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
 
@@ -24,20 +23,62 @@ const MyAppHeader = () => (
   </View>
 );
 
-export default function RootLayout() {
+import type { Schema } from '@/amplify/data/resource';
+import { fetchUserAttributes, getCurrentUser } from 'aws-amplify/auth';
+import { generateClient } from 'aws-amplify/data';
+import { useEffect } from 'react';
+
+const client = generateClient<Schema>();
+
+function LayoutContent() {
+  const { authStatus } = useAuthenticator((context) => [context.authStatus]);
   const colorScheme = useColorScheme();
 
+  useEffect(() => {
+    async function checkOrCreateUserProfile() {
+      if (authStatus === 'authenticated') {
+        const user = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
+        const email = attributes.email;
+        if (!email) return;
+        const { data: profiles } = await client.models.UserProfile.list({
+          filter: { email: { eq: email } }
+        });
+        if (profiles.length === 0) {
+          console.log('Creating new UserProfile for:', email);
+          await client.models.UserProfile.create({
+            email: email,
+          });
+        }
+      }
+    }
+
+    checkOrCreateUserProfile();
+  }, [authStatus]);
+
+  if (authStatus === 'authenticated') {
+    return (
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Authenticator Header={MyAppHeader} />
+    </View>
+  );
+}
+
+export default function RootLayout() {
   return (
     <Authenticator.Provider>
-      <Authenticator Header={MyAppHeader}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </Authenticator>
+      <LayoutContent />
     </Authenticator.Provider>
   );
 }

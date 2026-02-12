@@ -11,6 +11,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
 
+import type { Schema } from '@/amplify/data/resource';
+import { fetchUserAttributes } from 'aws-amplify/auth';
+import { generateClient } from 'aws-amplify/data';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator } from 'react-native';
+import ProfileSetup from '../components/ProfileSetup';
+
 Amplify.configure(outputs);
 
 export const unstable_settings = {
@@ -23,40 +30,56 @@ const MyAppHeader = () => (
   </View>
 );
 
-import type { Schema } from '@/amplify/data/resource';
-import { fetchUserAttributes, getCurrentUser } from 'aws-amplify/auth';
-import { generateClient } from 'aws-amplify/data';
-import { useEffect } from 'react';
-
 const client = generateClient<Schema>();
 
 function LayoutContent() {
   const { authStatus } = useAuthenticator((context) => [context.authStatus]);
   const colorScheme = useColorScheme();
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   useEffect(() => {
-    async function checkOrCreateUserProfile() {
+    async function checkProfile() {
       if (authStatus === 'authenticated') {
-        const user = await getCurrentUser();
         const attributes = await fetchUserAttributes();
         const email = attributes.email;
-        if (!email) return;
+
+        if (!email) {
+          setHasProfile(false);
+          return;
+        }
+
         const { data: profiles } = await client.models.UserProfile.list({
           filter: { email: { eq: email } }
         });
-        if (profiles.length === 0) {
-          console.log('Creating new UserProfile for:', email);
-          await client.models.UserProfile.create({
-            email: email,
-          });
+
+        if (profiles.length > 0) {
+          setHasProfile(true);
+        } else {
+          setHasProfile(false);
         }
       }
     }
 
-    checkOrCreateUserProfile();
+    checkProfile();
   }, [authStatus]);
 
   if (authStatus === 'authenticated') {
+    if (hasProfile == null) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" />
+          <Text style={{ marginTop: 10 }}>Checking Profile...</Text>
+        </View>
+      );
+    }
+    if (hasProfile === false) {
+      return (
+        <View style={{ flex: 1 }}>
+          <ProfileSetup onComplete={() => setHasProfile(true)} />
+        </View>
+      );
+    }
+
     return (
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>

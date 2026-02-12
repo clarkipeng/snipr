@@ -1,11 +1,37 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { type Schema } from "@/amplify/data/resource";
 import { getCurrentUser } from 'aws-amplify/auth';
 import { generateClient } from "aws-amplify/data";
+import { getUrl } from 'aws-amplify/storage';
 
 const client = generateClient<Schema>();
+
+const UserAvatar = ({ path }: { path: string | null }) => {
+    const [uri, setUri] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!path) {
+            setUri(null);
+            return;
+        }
+        async function fetchImage() {
+            if (!path) return;
+            if (path.startsWith('http')) {
+                setUri(path);
+                return;
+            }
+            const result = await getUrl({ path });
+            setUri(result.url.toString());
+        }
+        fetchImage();
+    }, [path]);
+
+    if (!uri) return <View style={styles.avatarPlaceholder} />;
+
+    return <Image source={{ uri }} style={styles.avatarImage} />;
+};
 
 export default function FriendsScreen() {
     const [searchQuery, setSearchQuery] = useState('');
@@ -16,22 +42,19 @@ export default function FriendsScreen() {
 
     useEffect(() => {
         async function getFriendsAndUser() {
-            const { data: users } = await client.models.UserProfile.list();
-
             const { userId } = await getCurrentUser();
             setUserId(userId);
 
             const { data: friendshipRecords } = await client.models.Friendship.list();
             const friendIds = new Set(friendshipRecords.map(f => f.friendId));
 
-            const { data: allUsers } = await client.models.UserProfile.list();
-            const otherUsers = allUsers.filter(u => u.id !== userId);
-            setFriends(otherUsers);
+            const { data: users } = await client.models.UserProfile.list();
 
             const friends: Schema['UserProfile']['type'][] = [];
             const nonFriends: Schema['UserProfile']['type'][] = [];
 
-            allUsers.forEach(user => {
+            users.forEach(user => {
+                if (!user) return;
                 if (user.id === userId) return;
 
                 if (friendIds.has(user.id)) {
@@ -63,7 +86,6 @@ export default function FriendsScreen() {
         ? nonFriends.filter(u => u.email.includes(searchQuery.toLowerCase()))
         : friends;
 
-    // return <ul>{todos.map(todo => <li key={todo.id}>{todo.content}</li>)}</ul>
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -88,11 +110,16 @@ export default function FriendsScreen() {
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
                     <View style={styles.friendItem}>
-                        <View style={styles.avatarPlaceholder} />
+                        <UserAvatar path={item.profilePicture || null} />
                         <View>
                             <Text style={styles.friendName}>{item.name}</Text>
                             <Text style={styles.friendEmail}>{item.email}</Text>
                         </View>
+                        {isSearching && (
+                            <TouchableOpacity onPress={() => addFriend(item)} style={{ marginLeft: 'auto' }}>
+                                <Text style={{ color: 'blue' }}>Add</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
                 style={styles.list}
@@ -152,6 +179,12 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         backgroundColor: '#ddd',
+        marginRight: 15,
+    },
+    avatarImage: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         marginRight: 15,
     },
     friendName: {

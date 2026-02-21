@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/themed-text';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 type LeaderboardRowProps = {
   rank: number;
@@ -7,6 +7,7 @@ type LeaderboardRowProps = {
   profilePictureUrl: string | null;
   snipeCount: number;
   timesSnipedCount: number;
+  onPress?: () => void;
 };
 
 function getRankStyle(rank: number) {
@@ -29,9 +30,11 @@ export function LeaderboardRow({
   profilePictureUrl,
   snipeCount,
   timesSnipedCount,
+  onPress,
 }: LeaderboardRowProps) {
+  const Container = onPress ? TouchableOpacity : View;
   return (
-    <View style={[styles.row, rank <= 3 && styles.topRow]}>
+    <Container onPress={onPress} style={[styles.row, rank <= 3 && styles.topRow]}>
       <View style={[styles.rankBadge, getRankStyle(rank)]}>
         <ThemedText style={styles.rankText}>{getRankLabel(rank)}</ThemedText>
       </View>
@@ -56,7 +59,7 @@ export function LeaderboardRow({
       <View style={styles.scoreContainer}>
         <ThemedText style={styles.score}>{snipeCount}</ThemedText>
       </View>
-    </View>
+    </Container>
   );
 }
 

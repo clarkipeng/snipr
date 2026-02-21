@@ -13,6 +13,8 @@ const schema = a.schema({
       email: a.string().required(),
       profilePicture: a.string(),
       friends: a.hasMany('Friendship', 'userId'),
+      snipesMade: a.hasMany('Snipe', 'sniperId'),
+      snipesReceived: a.hasMany('Snipe', 'targetId'),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -27,6 +29,20 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.owner(),
+    ]),
+
+  Snipe: a
+    .model({
+      sniperId: a.id().required(),
+      targetId: a.id().required(),
+      imageKey: a.string().required(),
+      caption: a.string(),
+      sniper: a.belongsTo('UserProfile', 'sniperId'),
+      target: a.belongsTo('UserProfile', 'targetId'),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read']),
     ]),
 });
 

@@ -84,7 +84,7 @@ function LayoutContent() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Profile' }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

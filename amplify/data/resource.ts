@@ -13,6 +13,8 @@ const schema = a.schema({
       email: a.string().required(),
       profilePicture: a.string(),
       friends: a.hasMany('Friendship', 'userId'),
+      sentRequests: a.hasMany('FriendRequest', 'senderId'),
+      receivedRequests: a.hasMany('FriendRequest', 'receiverId'),
       snipesMade: a.hasMany('Snipe', 'sniperId'),
       snipesReceived: a.hasMany('Snipe', 'targetId'),
     })
@@ -28,7 +30,18 @@ const schema = a.schema({
       user: a.belongsTo('UserProfile', 'userId'),
     })
     .authorization((allow) => [
-      allow.owner(),
+      allow.authenticated(),
+    ]),
+
+  FriendRequest: a
+    .model({
+      senderId: a.id().required(),
+      receiverId: a.id().required(),
+      sender: a.belongsTo('UserProfile', 'senderId'),
+      receiver: a.belongsTo('UserProfile', 'receiverId'),
+    })
+    .authorization((allow) => [
+      allow.authenticated(),
     ]),
 
   Snipe: a

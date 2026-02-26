@@ -1,9 +1,9 @@
 {
   "auth": {
-    "user_pool_id": "us-west-2_HEn5kfJU9",
+    "user_pool_id": "us-west-2_ttG5AgQI0",
     "aws_region": "us-west-2",
-    "user_pool_client_id": "ts76icjg05dlvgu1tqkb2e7v1",
-    "identity_pool_id": "us-west-2:4b622ffd-f26a-4f4d-bfd1-caaa92c1dacb",
+    "user_pool_client_id": "2p2e5ij8hv0m066a6k1ob875pm",
+    "identity_pool_id": "us-west-2:569c6eb4-8beb-415f-b9c8-ee65c2c92377",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email"
@@ -26,7 +26,7 @@
     "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://5sjd4mnjfrerthpq5ly6omgfga.appsync-api.us-west-2.amazonaws.com/graphql",
+    "url": "https://ve6dr4v4e5c4xa6uu4dy3em2ce.appsync-api.us-west-2.amazonaws.com/graphql",
     "aws_region": "us-west-2",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
     "authorization_types": [
@@ -79,6 +79,38 @@
                 "connectionType": "HAS_MANY",
                 "associatedWith": [
                   "userId"
+                ]
+              }
+            },
+            "sentRequests": {
+              "name": "sentRequests",
+              "isArray": true,
+              "type": {
+                "model": "FriendRequest"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true,
+              "association": {
+                "connectionType": "HAS_MANY",
+                "associatedWith": [
+                  "senderId"
+                ]
+              }
+            },
+            "receivedRequests": {
+              "name": "receivedRequests",
+              "isArray": true,
+              "type": {
+                "model": "FriendRequest"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true,
+              "association": {
+                "connectionType": "HAS_MANY",
+                "associatedWith": [
+                  "receiverId"
                 ]
               }
             },
@@ -238,10 +270,108 @@
               "properties": {
                 "rules": [
                   {
-                    "provider": "userPools",
-                    "ownerField": "owner",
-                    "allow": "owner",
-                    "identityClaim": "cognito:username",
+                    "allow": "private",
+                    "operations": [
+                      "create",
+                      "update",
+                      "delete",
+                      "read"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "primaryKeyInfo": {
+            "isCustomPrimaryKey": false,
+            "primaryKeyFieldName": "id",
+            "sortKeyFieldNames": []
+          }
+        },
+        "FriendRequest": {
+          "name": "FriendRequest",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "senderId": {
+              "name": "senderId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "receiverId": {
+              "name": "receiverId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "sender": {
+              "name": "sender",
+              "isArray": false,
+              "type": {
+                "model": "UserProfile"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "association": {
+                "connectionType": "BELONGS_TO",
+                "targetNames": [
+                  "senderId"
+                ]
+              }
+            },
+            "receiver": {
+              "name": "receiver",
+              "isArray": false,
+              "type": {
+                "model": "UserProfile"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "association": {
+                "connectionType": "BELONGS_TO",
+                "targetNames": [
+                  "receiverId"
+                ]
+              }
+            },
+            "createdAt": {
+              "name": "createdAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            },
+            "updatedAt": {
+              "name": "updatedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            }
+          },
+          "syncable": true,
+          "pluralName": "FriendRequests",
+          "attributes": [
+            {
+              "type": "model",
+              "properties": {}
+            },
+            {
+              "type": "auth",
+              "properties": {
+                "rules": [
+                  {
+                    "allow": "private",
                     "operations": [
                       "create",
                       "update",
@@ -390,11 +520,11 @@
   },
   "storage": {
     "aws_region": "us-west-2",
-    "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
+    "bucket_name": "amplify-snipr-clarkpeng-s-sniprstoragebucket75ada2-lnt6i11ysmhf",
     "buckets": [
       {
         "name": "sniprStorage",
-        "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
+        "bucket_name": "amplify-snipr-clarkpeng-s-sniprstoragebucket75ada2-lnt6i11ysmhf",
         "aws_region": "us-west-2",
         "paths": {
           "snipes/*": {

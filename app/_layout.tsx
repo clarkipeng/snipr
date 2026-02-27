@@ -2,11 +2,13 @@ import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import 'react-native-get-random-values';
 import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';
 
+import AuthScreen from '@/components/AuthScreen';
+import { PendingRequestsProvider } from '@/context/PendingRequestsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
@@ -16,7 +18,6 @@ import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
-import { PendingRequestsProvider } from '@/context/PendingRequestsContext';
 import ProfileSetup from '../components/ProfileSetup';
 
 Amplify.configure(outputs);
@@ -24,12 +25,6 @@ Amplify.configure(outputs);
 export const unstable_settings = {
   anchor: '(tabs)',
 };
-
-const MyAppHeader = () => (
-  <View style={styles.headerContainer}>
-    <Text style={styles.headerText}>Welcome to Snipr</Text>
-  </View>
-);
 
 const client = generateClient<Schema>();
 
@@ -67,9 +62,9 @@ function LayoutContent() {
   if (authStatus === 'authenticated') {
     if (hasProfile == null) {
       return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 10 }}>Checking Profile...</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0a' }}>
+          <ActivityIndicator size="large" color="#FF3B30" />
+          <Text style={{ marginTop: 10, color: '#fff' }}>Checking Profile...</Text>
         </View>
       );
     }
@@ -94,11 +89,7 @@ function LayoutContent() {
     );
   }
 
-  return (
-    <View style={{ flex: 1 }}>
-      <Authenticator Header={MyAppHeader} />
-    </View>
-  );
+  return <AuthScreen />;
 }
 
 export default function RootLayout() {
@@ -108,16 +99,3 @@ export default function RootLayout() {
     </Authenticator.Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
-  },
-  headerText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-});

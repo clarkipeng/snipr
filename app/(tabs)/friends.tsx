@@ -63,7 +63,11 @@ export default function FriendsScreen() {
             setAllUsersMap(map);
 
             const { data: friendshipRecords } = await client.models.Friendship.list();
-            const friendIds = new Set(friendshipRecords.map(f => f.friendId));
+            const friendIds = new Set(
+                friendshipRecords
+                    .filter(f => f.userId === currentUserId)
+                    .map(f => f.friendId)
+            );
 
             const { data: requestRecords } = await client.models.FriendRequest.list();
             const incoming = requestRecords.filter(r => r.receiverId === currentUserId);

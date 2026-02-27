@@ -2,6 +2,7 @@ import type { Schema } from '@/amplify/data/resource';
 import { SnipeCard } from '@/components/SnipeCard';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
 import { useEffect, useState } from 'react';
@@ -28,13 +29,27 @@ export default function HomeScreen() {
     try {
       setError(null);
 
+      // Resolve current user and their friend IDs
+      const attributes = await fetchUserAttributes();
+      const { data: allUsers } = await client.models.UserProfile.list();
+      const currentUser = allUsers.find(u => u.email === attributes.email);
+      const currentUserId = currentUser?.id ?? null;
+
+      const { data: friendshipRecords } = await client.models.Friendship.list();
+      const friendIds = new Set(
+        friendshipRecords
+          .filter(f => f.userId === currentUserId)
+          .map(f => f.friendId)
+      );
+
       // Fetch all snipes with needed fields
       const { data: snipes } = await client.models.Snipe.list({
         selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
       });
 
-      // Sort newest first, take top 30
-      const sorted = [...snipes]
+      // Filter to friends' snipes and own snipes, sort newest first, take top 30
+      const filtered = snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
+      const sorted = [...filtered]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 30);
 

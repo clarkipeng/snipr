@@ -20,6 +20,8 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   'camera.fill': 'camera-alt',
   'person.2.fill': 'people',
+  'trophy.fill': 'emoji-events',
+  'person.circle.fill': 'account-circle',
 } as IconMapping;
 
 /**

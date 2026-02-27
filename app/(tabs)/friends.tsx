@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { type Schema } from "@/amplify/data/resource";
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from "aws-amplify/data";
 import { getUrl } from 'aws-amplify/storage';
@@ -34,6 +35,9 @@ const UserAvatar = ({ path }: { path: string | null }) => {
 };
 
 export default function FriendsScreen() {
+    const colorScheme = useColorScheme();
+    const isDark = colorScheme === 'dark';
+
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'friends' | 'search' | 'requests'>('friends');
 
@@ -194,21 +198,21 @@ export default function FriendsScreen() {
                 <Text style={styles.title}>Friends</Text>
             </View>
 
-            <View style={styles.tabContainer}>
+            <View style={[styles.tabContainer, isDark && styles.tabContainerDark]}>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
+                    style={[styles.tab, activeTab === 'friends' && (isDark ? styles.activeTabDark : styles.activeTab)]}
                     onPress={() => setActiveTab('friends')}
                 >
                     <Text style={[styles.tabText, activeTab === 'friends' && styles.activeTabText]}>My Friends</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'search' && styles.activeTab]}
+                    style={[styles.tab, activeTab === 'search' && (isDark ? styles.activeTabDark : styles.activeTab)]}
                     onPress={() => setActiveTab('search')}
                 >
                     <Text style={[styles.tabText, activeTab === 'search' && styles.activeTabText]}>Add Friends</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
+                    style={[styles.tab, activeTab === 'requests' && (isDark ? styles.activeTabDark : styles.activeTab)]}
                     onPress={() => setActiveTab('requests')}
                 >
                     <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
@@ -220,7 +224,7 @@ export default function FriendsScreen() {
             {activeTab === 'search' && (
                 <View style={styles.searchContainer}>
                     <TextInput
-                        style={styles.searchInput}
+                        style={[styles.searchInput, isDark && styles.searchInputDark]}
                         placeholder="Search for users..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -286,6 +290,11 @@ const styles = StyleSheet.create({
         borderRadius: 25,
         paddingHorizontal: 20,
         fontSize: 16,
+        color: '#111',
+    },
+    searchInputDark: {
+        backgroundColor: '#1c1c1e',
+        color: '#f0f0f0',
     },
     tabContainer: {
         flexDirection: 'row',
@@ -293,6 +302,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0f0f0',
         borderRadius: 25,
         padding: 4,
+    },
+    tabContainerDark: {
+        backgroundColor: '#1c1c1e',
     },
     tab: {
         flex: 1,
@@ -305,6 +317,14 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    activeTabDark: {
+        backgroundColor: '#2c2c2e',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
         shadowRadius: 4,
         elevation: 2,
     },

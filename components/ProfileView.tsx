@@ -1,15 +1,3 @@
-/**
- * ProfileView Component
- *
- * Reusable profile display used by:
- * - Profile tab (shows current user + sign out)
- * - Modal (shows any user's profile when tapped from leaderboard)
- *
- * Props:
- * - userId: if provided, loads that user's profile. Otherwise loads current user.
- * - showSignOut: whether to show the sign out button (only for own profile)
- */
-
 import type { Schema } from '@/amplify/data/resource';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -21,7 +9,9 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -34,6 +24,7 @@ type ProfileData = {
   profilePictureUrl: string | null;
   snipesMade: number;
   snipesReceived: number;
+  recentSnipeUrls: string[];
 };
 
 type ProfileViewProps = {
@@ -52,15 +43,12 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
         let targetProfile;
 
         if (userId) {
-          // Loading another user's profile by ID
           const { data } = await client.models.UserProfile.get({ id: userId });
           targetProfile = data;
         } else {
-          // Loading current user's profile by email
           const attributes = await fetchUserAttributes();
           const email = attributes.email;
           if (!email) return;
-
           const { data: profiles } = await client.models.UserProfile.list({
             filter: { email: { eq: email } },
           });
@@ -77,20 +65,40 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           } catch {}
         }
 
-        const { data: made } = await client.models.Snipe.list({
-          filter: { sniperId: { eq: targetProfile.id } },
-        });
-        const { data: received } = await client.models.Snipe.list({
-          filter: { targetId: { eq: targetProfile.id } },
-        });
+        const [{ data: made }, { data: received }] = await Promise.all([
+          client.models.Snipe.list({ filter: { sniperId: { eq: targetProfile.id } } }),
+          client.models.Snipe.list({ filter: { targetId: { eq: targetProfile.id } } }),
+        ]);
 
+        // Set profile immediately so the screen shows without waiting for grid images
         setProfile({
           name: targetProfile.name,
           email: targetProfile.email,
           profilePictureUrl,
           snipesMade: made.length,
           snipesReceived: received.length,
+          recentSnipeUrls: [],
         });
+
+        // Async: load up to 9 snipe thumbnails for the grid
+        const sorted = [...made]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 9);
+
+        const urls = (
+          await Promise.all(
+            sorted.map(async (snipe) => {
+              try {
+                const result = await getUrl({ path: snipe.imageKey });
+                return result.url.toString();
+              } catch {
+                return null;
+              }
+            })
+          )
+        ).filter((u): u is string => u !== null);
+
+        setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
       } catch (err) {
         console.error('Failed to load profile:', err);
       } finally {
@@ -118,54 +126,69 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   }
 
   return (
-    <ThemedView style={styles.container}>
-      {profile.profilePictureUrl ? (
-        <Image source={{ uri: profile.profilePictureUrl }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <ThemedText style={styles.avatarInitial}>
-            {profile.name.charAt(0).toUpperCase()}
-          </ThemedText>
-        </View>
-      )}
+    <ThemedView style={styles.outer}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {profile.profilePictureUrl ? (
+          <Image source={{ uri: profile.profilePictureUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <ThemedText style={styles.avatarInitial}>
+              {profile.name.charAt(0).toUpperCase()}
+            </ThemedText>
+          </View>
+        )}
 
-      <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
-      <ThemedText style={styles.email}>{profile.email}</ThemedText>
+        <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
+        <ThemedText style={styles.email}>{profile.email}</ThemedText>
 
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
-          <ThemedText style={styles.statLabel}>Snipes</ThemedText>
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
+            <ThemedText style={styles.statLabel}>Snipes</ThemedText>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
+            <ThemedText style={styles.statLabel}>Sniped</ThemedText>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <ThemedText style={styles.statNumber}>
+              {profile.snipesMade - profile.snipesReceived}
+            </ThemedText>
+            <ThemedText style={styles.statLabel}>Net</ThemedText>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
-          <ThemedText style={styles.statLabel}>Sniped</ThemedText>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>
-            {profile.snipesMade - profile.snipesReceived}
-          </ThemedText>
-          <ThemedText style={styles.statLabel}>Net</ThemedText>
-        </View>
-      </View>
 
-      {showSignOut && (
-        <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-          <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
-        </TouchableOpacity>
-      )}
+        {/* Recent snipes grid */}
+        {profile.recentSnipeUrls.length > 0 && (
+          <View style={styles.gridSection}>
+            <ThemedText style={styles.gridTitle}>Snipes</ThemedText>
+            <View style={styles.grid}>
+              {profile.recentSnipeUrls.map((url, i) => (
+                <Image key={i} source={{ uri: url }} style={styles.gridImage} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {showSignOut && (
+          <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
+            <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
+  outer: { flex: 1 },
   container: {
-    flex: 1,
     alignItems: 'center',
     paddingTop: 60,
     paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   centered: {
     flex: 1,
@@ -173,18 +196,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     marginBottom: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(150, 150, 150, 0.25)',
   },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(150, 150, 150, 0.2)',
+    backgroundColor: 'rgba(150, 150, 150, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: '700',
   },
   name: {
@@ -199,30 +224,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(150, 150, 150, 0.1)',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
     width: '100%',
     marginBottom: 32,
   },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: 12,
-    opacity: 0.5,
-    marginTop: 4,
-  },
+  statBox: { flex: 1, alignItems: 'center' },
+  statNumber: { fontSize: 24, fontWeight: '800' },
+  statLabel: { fontSize: 12, opacity: 0.5, marginTop: 4 },
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 40,
     backgroundColor: 'rgba(150, 150, 150, 0.3)',
   },
+
+  // Photo grid
+  gridSection: { width: '100%', marginBottom: 32 },
+  gridTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  gridImage: {
+    width: '32.5%',
+    aspectRatio: 1,
+    borderRadius: 4,
+    backgroundColor: '#222',
+    margin: 1,
+  },
+
   signOutButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
     paddingVertical: 14,

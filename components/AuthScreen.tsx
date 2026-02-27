@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   signIn,
+  signOut,
   signUp,
   confirmSignUp,
   resetPassword,
@@ -64,11 +65,13 @@ export default function AuthScreen() {
     setError('');
     setLoading(true);
     try {
+      await signOut();
       const result: SignInOutput = await signIn({ username: email, password });
       if (result.nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
         setMode('confirm');
       }
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err.message ?? 'Login failed');
     } finally {
       setLoading(false);

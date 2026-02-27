@@ -2,7 +2,7 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { usePendingRequests } from '@/context/PendingRequestsContext';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import 'react-native-get-random-values';
 
 export default function TabLayout() {
   const { pendingCount } = usePendingRequests();

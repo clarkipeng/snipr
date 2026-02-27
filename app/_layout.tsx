@@ -3,6 +3,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View } from 'react-native';
+import '@aws-amplify/react-native';
 import 'react-native-get-random-values';
 import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';

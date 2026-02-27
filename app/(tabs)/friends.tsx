@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { type Schema } from "@/amplify/data/resource";
@@ -15,6 +15,7 @@ const UserAvatar = ({ path }: { path: string | null }) => {
     const [uri, setUri] = useState<string | null>(null);
 
     useEffect(() => {
+        let cancelled = false;
         if (!path) {
             setUri(null);
             return;
@@ -22,13 +23,14 @@ const UserAvatar = ({ path }: { path: string | null }) => {
         async function fetchImage() {
             if (!path) return;
             if (path.startsWith('http')) {
-                setUri(path);
+                if (!cancelled) setUri(path);
                 return;
             }
             const result = await getUrl({ path });
-            setUri(result.url.toString());
+            if (!cancelled) setUri(result.url.toString());
         }
         fetchImage();
+        return () => { cancelled = true; };
     }, [path]);
 
     if (!uri) return <View style={styles.avatarPlaceholder} />;

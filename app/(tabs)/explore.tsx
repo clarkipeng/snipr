@@ -40,7 +40,7 @@ function SkeletonRow() {
         Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
       ])
     ).start();
-  }, [opacity]);
+  }, []);
 
   return (
     <Animated.View style={[skeletonStyles.row, { opacity }]}>

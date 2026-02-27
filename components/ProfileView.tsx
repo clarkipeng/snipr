@@ -38,6 +38,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadProfile() {
       try {
         let targetProfile;
@@ -55,7 +56,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           targetProfile = profiles[0] ?? null;
         }
 
-        if (!targetProfile) return;
+        if (!targetProfile || cancelled) return;
 
         let profilePictureUrl: string | null = null;
         if (targetProfile.profilePicture) {
@@ -69,6 +70,8 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           client.models.Snipe.list({ filter: { sniperId: { eq: targetProfile.id } } }),
           client.models.Snipe.list({ filter: { targetId: { eq: targetProfile.id } } }),
         ]);
+
+        if (cancelled) return;
 
         // Set profile immediately so the screen shows without waiting for grid images
         setProfile({
@@ -98,15 +101,18 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           )
         ).filter((u): u is string => u !== null);
 
-        setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        if (!cancelled) {
+          setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        }
       } catch (err) {
         console.error('Failed to load profile:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     loadProfile();
+    return () => { cancelled = true; };
   }, [userId]);
 
   if (loading) {

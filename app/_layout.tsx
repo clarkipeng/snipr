@@ -39,13 +39,14 @@ function LayoutContent() {
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function checkProfile() {
       if (authStatus === 'authenticated') {
         const attributes = await fetchUserAttributes();
         const email = attributes.email;
 
         if (!email) {
-          setHasProfile(false);
+          if (!cancelled) setHasProfile(false);
           return;
         }
 
@@ -53,15 +54,14 @@ function LayoutContent() {
           filter: { email: { eq: email } }
         });
 
-        if (profiles.length > 0) {
-          setHasProfile(true);
-        } else {
-          setHasProfile(false);
+        if (!cancelled) {
+          setHasProfile(profiles.length > 0);
         }
       }
     }
 
     checkProfile();
+    return () => { cancelled = true; };
   }, [authStatus]);
 
   if (authStatus === 'authenticated') {

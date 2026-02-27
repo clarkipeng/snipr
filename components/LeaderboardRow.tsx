@@ -7,8 +7,16 @@ type LeaderboardRowProps = {
   profilePictureUrl: string | null;
   snipeCount: number;
   timesSnipedCount: number;
+  displayMultiplier?: number;
   onPress?: () => void;
 };
+
+function getMedalEmoji(rank: number) {
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return null;
+}
 
 function getRankStyle(rank: number) {
   if (rank === 1) return styles.gold;
@@ -17,26 +25,27 @@ function getRankStyle(rank: number) {
   return styles.defaultRank;
 }
 
-function getRankLabel(rank: number) {
-  if (rank === 1) return '1st';
-  if (rank === 2) return '2nd';
-  if (rank === 3) return '3rd';
-  return `${rank}th`;
-}
-
 export function LeaderboardRow({
   rank,
   name,
   profilePictureUrl,
   snipeCount,
   timesSnipedCount,
+  displayMultiplier = 1,
   onPress,
 }: LeaderboardRowProps) {
+  const medal = getMedalEmoji(rank);
   const Container = onPress ? TouchableOpacity : View;
+  const displayScore = Math.round(snipeCount * displayMultiplier);
+
   return (
     <Container onPress={onPress} style={[styles.row, rank <= 3 && styles.topRow]}>
       <View style={[styles.rankBadge, getRankStyle(rank)]}>
-        <ThemedText style={styles.rankText}>{getRankLabel(rank)}</ThemedText>
+        {medal ? (
+          <ThemedText style={styles.medalText}>{medal}</ThemedText>
+        ) : (
+          <ThemedText style={styles.rankText}>{rank}</ThemedText>
+        )}
       </View>
 
       {profilePictureUrl ? (
@@ -52,12 +61,13 @@ export function LeaderboardRow({
       <View style={styles.info}>
         <ThemedText style={styles.name}>{name}</ThemedText>
         <ThemedText style={styles.stats}>
-          {snipeCount} snipe{snipeCount !== 1 ? 's' : ''} · sniped {timesSnipedCount} time{timesSnipedCount !== 1 ? 's' : ''}
+          sniped {timesSnipedCount} time{timesSnipedCount !== 1 ? 's' : ''}
         </ThemedText>
       </View>
 
       <View style={styles.scoreContainer}>
-        <ThemedText style={styles.score}>{snipeCount}</ThemedText>
+        <ThemedText style={styles.score}>{displayScore}</ThemedText>
+        <ThemedText style={styles.scoreLabel}>snipes</ThemedText>
       </View>
     </Container>
   );
@@ -67,42 +77,37 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(150, 150, 150, 0.2)',
   },
   topRow: {
-    backgroundColor: 'rgba(150, 150, 150, 0.05)',
+    backgroundColor: 'rgba(150, 150, 150, 0.07)',
   },
   rankBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
+  medalText: {
+    fontSize: 20,
+  },
   rankText: {
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 14,
   },
-  gold: {
-    backgroundColor: 'rgba(255, 215, 0, 0.25)',
-  },
-  silver: {
-    backgroundColor: 'rgba(192, 192, 192, 0.25)',
-  },
-  bronze: {
-    backgroundColor: 'rgba(205, 127, 50, 0.25)',
-  },
-  defaultRank: {
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
-  },
+  gold: { backgroundColor: 'rgba(255, 215, 0, 0.2)' },
+  silver: { backgroundColor: 'rgba(192, 192, 192, 0.2)' },
+  bronze: { backgroundColor: 'rgba(205, 127, 50, 0.2)' },
+  defaultRank: { backgroundColor: 'rgba(150, 150, 150, 0.1)' },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
   },
   avatarPlaceholder: {
@@ -112,11 +117,11 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 17,
   },
   info: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   name: {
     fontWeight: '600',
@@ -132,6 +137,11 @@ const styles = StyleSheet.create({
   },
   score: {
     fontWeight: '800',
-    fontSize: 20,
+    fontSize: 22,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    opacity: 0.45,
+    marginTop: 1,
   },
 });

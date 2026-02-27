@@ -147,6 +147,21 @@ export default function FriendsScreen() {
         setPendingCount(Math.max(0, incomingRequests.length - 1));
     };
 
+    const removeFriend = async (friend: Schema['UserProfile']['type']) => {
+        if (!userId) return;
+
+        const { data: allFriendships } = await client.models.Friendship.list();
+        const toDelete = allFriendships.filter(
+            f =>
+                (f.userId === userId && f.friendId === friend.id) ||
+                (f.userId === friend.id && f.friendId === userId)
+        );
+        await Promise.all(toDelete.map(f => client.models.Friendship.delete({ id: f.id })));
+
+        setFriends(prev => prev.filter(u => u.id !== friend.id));
+        setNonFriends(prev => [...prev, friend]);
+    };
+
     const isSearching = activeTab === 'search' && searchQuery.length > 0;
 
     const displayedFriendsData = friends;
@@ -164,6 +179,14 @@ export default function FriendsScreen() {
                     <Text style={styles.friendName}>{item.name}</Text>
                     <Text style={styles.friendEmail}>{item.email}</Text>
                 </View>
+                {activeTab === 'friends' && (
+                    <TouchableOpacity
+                        onPress={() => removeFriend(item)}
+                        style={[styles.actionButton, styles.unfriendButton]}
+                    >
+                        <Text style={styles.actionButtonText}>Unfriend</Text>
+                    </TouchableOpacity>
+                )}
                 {activeTab === 'search' && (
                     <TouchableOpacity
                         onPress={() => hasSentRequest ? null : sendRequest(item)}
@@ -395,6 +418,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#34C759',
     },
     rejectButton: {
+        backgroundColor: '#FF3B30',
+    },
+    unfriendButton: {
         backgroundColor: '#FF3B30',
     },
     actionButtonText: {

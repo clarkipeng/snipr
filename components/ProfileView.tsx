@@ -147,24 +147,33 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
         <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
         <ThemedText style={styles.email}>{profile.email}</ThemedText>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
-            <ThemedText style={styles.statLabel}>Snipes</ThemedText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
-            <ThemedText style={styles.statLabel}>Sniped</ThemedText>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>
-              {profile.snipesMade - profile.snipesReceived}
-            </ThemedText>
-            <ThemedText style={styles.statLabel}>Net</ThemedText>
-          </View>
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
+          <ThemedText style={styles.statLabel}>Snipes</ThemedText>
         </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
+          <ThemedText style={styles.statLabel}>Sniped</ThemedText>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <ThemedText style={styles.statNumber}>
+            {profile.snipesMade - profile.snipesReceived}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>Net</ThemedText>
+        </View>
+      </View>
+
+      {profile.snipesMade === 0 && profile.snipesReceived === 0 && (
+        <View style={styles.emptySnipes}>
+          <ThemedText style={styles.emptySnipesEmoji}>🥷</ThemedText>
+          <ThemedText style={styles.emptySnipesText}>
+            No snipes yet — still lurking in the shadows...
+          </ThemedText>
+        </View>
+      )}
 
         {/* Recent snipes grid */}
         {profile.recentSnipeUrls.length > 0 && (
@@ -260,6 +269,19 @@ const styles = StyleSheet.create({
     margin: 1,
   },
 
+  emptySnipes: {
+    alignItems: 'center',
+    marginBottom: 32,
+    gap: 8,
+  },
+  emptySnipesEmoji: {
+    fontSize: 40,
+  },
+  emptySnipesText: {
+    fontSize: 14,
+    opacity: 0.5,
+    textAlign: 'center',
+  },
   signOutButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
     paddingVertical: 14,

@@ -1,10 +1,8 @@
 import type { Schema } from '@/amplify/data/resource';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { getCachedUrl } from '@/utils/url-cache';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -46,67 +44,50 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
     let cancelled = false;
     async function loadProfile() {
       try {
-        const attributes = await fetchUserAttributes();
+        const [attributes, { data: allUsers }] = await Promise.all([
+          fetchUserAttributes(),
+          client.models.UserProfile.list(),
+        ]);
+
         const currentEmail = attributes.email;
+        const userMap = new Map(allUsers.map(u => [u.id, u]));
+        const me = allUsers.find(u => u.email === currentEmail);
+        const meId = me?.id ?? null;
+        if (!cancelled) setCurrentUserId(meId);
 
-        let meId: string | null = null;
-        if (currentEmail) {
-          const { data: meProfiles } = await client.models.UserProfile.list({
-            filter: { email: { eq: currentEmail } },
-          });
-          meId = meProfiles[0]?.id ?? null;
-          if (!cancelled) setCurrentUserId(meId);
-        }
-
-        let targetProfile;
-
-        if (userId) {
-          const { data } = await client.models.UserProfile.get({ id: userId });
-          targetProfile = data;
-        } else {
-          if (!currentEmail) return;
-          const { data: profiles } = await client.models.UserProfile.list({
-            filter: { email: { eq: currentEmail } },
-          });
-          targetProfile = profiles[0] ?? null;
-        }
+        const targetProfile = userId
+          ? userMap.get(userId) ?? null
+          : me ?? null;
 
         if (!targetProfile || cancelled) return;
 
-        if (!userId || userId === meId) {
-          if (!cancelled) setFriendStatus('self');
-        } else if (meId) {
-          const [{ data: friendships }, { data: requests }] = await Promise.all([
-            client.models.Friendship.list(),
-            client.models.FriendRequest.list(),
-          ]);
+        const isViewingSelf = !userId || userId === meId;
 
-          const isFriend = friendships.some(
-            f => f.userId === meId && f.friendId === targetProfile!.id
-          );
-          const hasSentRequest = requests.some(
-            r => r.senderId === meId && r.receiverId === targetProfile!.id
-          );
-
-          if (!cancelled) {
-            setFriendStatus(isFriend ? 'friends' : hasSentRequest ? 'request_sent' : 'not_friends');
-          }
-        }
-
-        let profilePictureUrl: string | null = null;
-        if (targetProfile.profilePicture) {
-          try {
-            const result = await getUrl({ path: targetProfile.profilePicture });
-            profilePictureUrl = result.url.toString();
-          } catch {}
-        }
-
-        const [{ data: made }, { data: received }] = await Promise.all([
+        const [{ data: made }, { data: received }, friendStatusResult] = await Promise.all([
           client.models.Snipe.list({ filter: { sniperId: { eq: targetProfile.id } } }),
           client.models.Snipe.list({ filter: { targetId: { eq: targetProfile.id } } }),
+          isViewingSelf || !meId
+            ? Promise.resolve(null)
+            : Promise.all([
+                client.models.Friendship.list({ filter: { userId: { eq: meId } } }),
+                client.models.FriendRequest.list({ filter: { senderId: { eq: meId } } }),
+              ]),
         ]);
 
         if (cancelled) return;
+
+        if (isViewingSelf) {
+          setFriendStatus('self');
+        } else if (friendStatusResult) {
+          const [{ data: friendships }, { data: requests }] = friendStatusResult;
+          const isFriend = friendships.some(f => f.friendId === targetProfile.id);
+          const hasSentRequest = requests.some(r => r.receiverId === targetProfile.id);
+          setFriendStatus(isFriend ? 'friends' : hasSentRequest ? 'request_sent' : 'not_friends');
+        }
+
+        const profilePictureUrl = targetProfile.profilePicture
+          ? await getCachedUrl(targetProfile.profilePicture)
+          : null;
 
         setProfile({
           name: targetProfile.name,
@@ -122,16 +103,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           .slice(0, 9);
 
         const urls = (
-          await Promise.all(
-            sorted.map(async (snipe) => {
-              try {
-                const result = await getUrl({ path: snipe.imageKey });
-                return result.url.toString();
-              } catch {
-                return null;
-              }
-            })
-          )
+          await Promise.all(sorted.map(snipe => getCachedUrl(snipe.imageKey)))
         ).filter((u): u is string => u !== null);
 
         if (!cancelled) {
@@ -166,35 +138,35 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
   if (loading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" />
-      </ThemedView>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#FF3B30" />
+      </View>
     );
   }
 
   if (!profile) {
     return (
-      <ThemedView style={styles.centered}>
-        <ThemedText>Could not load profile.</ThemedText>
-      </ThemedView>
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Could not load profile.</Text>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.outer}>
+    <View style={styles.outer}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {profile.profilePictureUrl ? (
           <Image source={{ uri: profile.profilePictureUrl }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <ThemedText style={styles.avatarInitial}>
+            <Text style={styles.avatarInitial}>
               {profile.name.charAt(0).toUpperCase()}
-            </ThemedText>
+            </Text>
           </View>
         )}
 
-        <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
-        <ThemedText style={styles.email}>{profile.email}</ThemedText>
+        <Text style={styles.name}>{profile.name}</Text>
+        <Text style={styles.email}>{profile.email}</Text>
 
         {friendStatus === 'friends' && (
           <View style={[styles.friendButton, styles.friendButtonFriends]}>
@@ -220,38 +192,37 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           </View>
         )}
 
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
-          <ThemedText style={styles.statLabel}>Snipes</ThemedText>
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>{profile.snipesMade}</Text>
+            <Text style={styles.statLabel}>Snipes</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>{profile.snipesReceived}</Text>
+            <Text style={styles.statLabel}>Sniped</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>
+              {profile.snipesMade - profile.snipesReceived}
+            </Text>
+            <Text style={styles.statLabel}>Net</Text>
+          </View>
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
-          <ThemedText style={styles.statLabel}>Sniped</ThemedText>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statBox}>
-          <ThemedText style={styles.statNumber}>
-            {profile.snipesMade - profile.snipesReceived}
-          </ThemedText>
-          <ThemedText style={styles.statLabel}>Net</ThemedText>
-        </View>
-      </View>
 
-      {profile.snipesMade === 0 && profile.snipesReceived === 0 && (
-        <View style={styles.emptySnipes}>
-          <ThemedText style={styles.emptySnipesEmoji}>🥷</ThemedText>
-          <ThemedText style={styles.emptySnipesText}>
-            No snipes yet — still lurking in the shadows...
-          </ThemedText>
-        </View>
-      )}
+        {profile.snipesMade === 0 && profile.snipesReceived === 0 && (
+          <View style={styles.emptySnipes}>
+            <Text style={styles.emptySnipesEmoji}>🥷</Text>
+            <Text style={styles.emptySnipesText}>
+              No snipes yet — still lurking in the shadows...
+            </Text>
+          </View>
+        )}
 
-        {/* Recent snipes grid */}
         {profile.recentSnipeUrls.length > 0 && (
           <View style={styles.gridSection}>
-            <ThemedText style={styles.gridTitle}>Snipes</ThemedText>
+            <Text style={styles.gridTitle}>Snipes</Text>
             <View style={styles.grid}>
               {profile.recentSnipeUrls.map((url, i) => (
                 <Image key={i} source={{ uri: url }} style={styles.gridImage} />
@@ -262,16 +233,16 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         {showSignOut && (
           <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-            <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
+            <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: { flex: 1 },
+  outer: { flex: 1, backgroundColor: '#0B0B0F' },
   container: {
     alignItems: 'center',
     paddingTop: 60,
@@ -282,6 +253,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#0B0B0F',
+  },
+  errorText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
   },
   avatar: {
     width: 110,
@@ -289,29 +265,33 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     marginBottom: 16,
     borderWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.25)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
     fontSize: 42,
     fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
   },
   name: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
     marginBottom: 4,
   },
   email: {
     fontSize: 14,
-    opacity: 0.5,
-    marginBottom: 32,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 24,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    backgroundColor: '#15151B',
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
@@ -319,17 +299,16 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   statBox: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 24, fontWeight: '800' },
-  statLabel: { fontSize: 12, opacity: 0.5, marginTop: 4 },
+  statNumber: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 },
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 40,
-    backgroundColor: 'rgba(150, 150, 150, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
 
-  // Photo grid
   gridSection: { width: '100%', marginBottom: 32 },
-  gridTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  gridTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10, color: '#fff' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -337,8 +316,8 @@ const styles = StyleSheet.create({
   gridImage: {
     width: '32.5%',
     aspectRatio: 1,
-    borderRadius: 4,
-    backgroundColor: '#222',
+    borderRadius: 6,
+    backgroundColor: '#15151B',
     margin: 1,
   },
 
@@ -360,18 +339,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   friendButtonFriends: {
-    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   friendButtonTextFriends: {
-    color: '#888',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
     fontSize: 15,
   },
   friendButtonPending: {
-    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   friendButtonTextPending: {
-    color: '#888',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
     fontSize: 15,
   },
@@ -385,11 +364,11 @@ const styles = StyleSheet.create({
   },
   emptySnipesText: {
     fontSize: 14,
-    opacity: 0.5,
+    color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
   },
   signOutButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: 'rgba(255,59,48,0.12)',
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 12,

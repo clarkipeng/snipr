@@ -1,5 +1,6 @@
-import { ThemedText } from '@/components/themed-text';
-import { Image, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type SnipeCardProps = {
   sniperName: string;
@@ -27,9 +28,9 @@ function SniperAvatar({ url, name }: { url: string | null; name: string }) {
   }
   return (
     <View style={[styles.sniperAvatar, styles.sniperAvatarPlaceholder]}>
-      <ThemedText style={styles.sniperAvatarInitial}>
+      <Text style={styles.sniperAvatarInitial}>
         {name.charAt(0).toUpperCase()}
-      </ThemedText>
+      </Text>
     </View>
   );
 }
@@ -42,48 +43,82 @@ export function SnipeCard({
   caption,
   createdAt,
 }: SnipeCardProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  };
+
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <SniperAvatar url={sniperProfilePictureUrl} name={sniperName} />
-        <View style={styles.names}>
-          <ThemedText style={styles.sniperName}>{sniperName}</ThemedText>
-          <ThemedText style={styles.crosshair}> 🎯 </ThemedText>
-          <ThemedText style={styles.targetName}>{targetName}</ThemedText>
+    <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
+      <Pressable
+        style={styles.card}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+      >
+        <View style={styles.header}>
+          <SniperAvatar url={sniperProfilePictureUrl} name={sniperName} />
+          <View style={styles.names}>
+            <Text style={styles.sniperName}>{sniperName}</Text>
+            <Text style={styles.crosshair}> 🎯 </Text>
+            <Text style={styles.targetName}>{targetName}</Text>
+          </View>
+          <Text style={styles.time}>{formatTime(createdAt)}</Text>
         </View>
-        <ThemedText style={styles.time}>{formatTime(createdAt)}</ThemedText>
-      </View>
 
-      {imageUrl && (
-        <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
-      )}
+        {imageUrl && (
+          <View>
+            <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+            {caption && (
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.7)']}
+                style={styles.imageGradient}
+              />
+            )}
+          </View>
+        )}
 
-      {caption && (
-        <View style={styles.captionContainer}>
-          <ThemedText style={styles.caption}>{caption}</ThemedText>
-        </View>
-      )}
-    </View>
+        {caption && (
+          <View style={styles.captionContainer}>
+            <Text style={styles.caption}>{caption}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  cardOuter: {
+    marginBottom: 20,
+  },
   card: {
-    backgroundColor: 'rgba(150, 150, 150, 0.08)',
-    borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: '#15151B',
+    borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     gap: 8,
   },
   sniperAvatar: {
@@ -93,13 +128,14 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   sniperAvatarPlaceholder: {
-    backgroundColor: 'rgba(150, 150, 150, 0.25)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sniperAvatarInitial: {
     fontSize: 13,
     fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
   },
   names: {
     flexDirection: 'row',
@@ -108,25 +144,37 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   sniperName: {
-    fontWeight: '700',
-    fontSize: 15,
+    fontWeight: '800',
+    fontSize: 14,
+    color: '#fff',
+    letterSpacing: 0.3,
   },
   crosshair: {
-    fontSize: 14,
+    fontSize: 13,
   },
   targetName: {
-    fontWeight: '700',
-    fontSize: 15,
+    fontWeight: '800',
+    fontSize: 14,
+    color: '#fff',
+    letterSpacing: 0.3,
   },
   time: {
-    fontSize: 12,
-    opacity: 0.45,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '500',
     flexShrink: 0,
   },
   image: {
     width: '100%',
     aspectRatio: 4 / 3,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#0B0B0F',
+  },
+  imageGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
   },
   captionContainer: {
     paddingHorizontal: 14,
@@ -135,6 +183,6 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: 14,
     lineHeight: 20,
-    opacity: 0.8,
+    color: 'rgba(255,255,255,0.8)',
   },
 });

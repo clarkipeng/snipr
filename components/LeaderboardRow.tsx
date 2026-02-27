@@ -1,5 +1,4 @@
-import { ThemedText } from '@/components/themed-text';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type LeaderboardRowProps = {
   rank: number;
@@ -39,12 +38,12 @@ export function LeaderboardRow({
   const displayScore = Math.round(snipeCount * displayMultiplier);
 
   return (
-    <Container onPress={onPress} style={[styles.row, rank <= 3 && styles.topRow]}>
+    <Container onPress={onPress} style={styles.row}>
       <View style={[styles.rankBadge, getRankStyle(rank)]}>
         {medal ? (
-          <ThemedText style={styles.medalText}>{medal}</ThemedText>
+          <Text style={styles.medalText}>{medal}</Text>
         ) : (
-          <ThemedText style={styles.rankText}>{rank}</ThemedText>
+          <Text style={styles.rankText}>{rank}</Text>
         )}
       </View>
 
@@ -52,22 +51,22 @@ export function LeaderboardRow({
         <Image source={{ uri: profilePictureUrl }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <ThemedText style={styles.avatarInitial}>
+          <Text style={styles.avatarInitial}>
             {name.charAt(0).toUpperCase()}
-          </ThemedText>
+          </Text>
         </View>
       )}
 
       <View style={styles.info}>
-        <ThemedText style={styles.name}>{name}</ThemedText>
-        <ThemedText style={styles.stats}>
+        <Text style={styles.name}>{name}</Text>
+        <Text style={styles.stats}>
           sniped {timesSnipedCount} time{timesSnipedCount !== 1 ? 's' : ''}
-        </ThemedText>
+        </Text>
       </View>
 
       <View style={styles.scoreContainer}>
-        <ThemedText style={styles.score}>{displayScore}</ThemedText>
-        <ThemedText style={styles.scoreLabel}>snipes</ThemedText>
+        <Text style={styles.score}>{displayScore}</Text>
+        <Text style={styles.scoreLabel}>snipes</Text>
       </View>
     </Container>
   );
@@ -80,10 +79,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150, 150, 150, 0.2)',
-  },
-  topRow: {
-    backgroundColor: 'rgba(150, 150, 150, 0.07)',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   rankBadge: {
     width: 38,
@@ -99,11 +95,12 @@ const styles = StyleSheet.create({
   rankText: {
     fontWeight: '800',
     fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
   },
-  gold: { backgroundColor: 'rgba(255, 215, 0, 0.2)' },
-  silver: { backgroundColor: 'rgba(192, 192, 192, 0.2)' },
-  bronze: { backgroundColor: 'rgba(205, 127, 50, 0.2)' },
-  defaultRank: { backgroundColor: 'rgba(150, 150, 150, 0.1)' },
+  gold: { backgroundColor: 'rgba(255, 215, 0, 0.15)' },
+  silver: { backgroundColor: 'rgba(192, 192, 192, 0.15)' },
+  bronze: { backgroundColor: 'rgba(205, 127, 50, 0.15)' },
+  defaultRank: { backgroundColor: 'rgba(255,255,255,0.06)' },
   avatar: {
     width: 44,
     height: 44,
@@ -111,13 +108,14 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(150, 150, 150, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
     fontWeight: '700',
     fontSize: 17,
+    color: 'rgba(255,255,255,0.6)',
   },
   info: {
     flex: 1,
@@ -126,10 +124,11 @@ const styles = StyleSheet.create({
   name: {
     fontWeight: '600',
     fontSize: 15,
+    color: '#fff',
   },
   stats: {
     fontSize: 12,
-    opacity: 0.5,
+    color: 'rgba(255,255,255,0.4)',
   },
   scoreContainer: {
     marginLeft: 12,
@@ -138,10 +137,11 @@ const styles = StyleSheet.create({
   score: {
     fontWeight: '800',
     fontSize: 22,
+    color: '#fff',
   },
   scoreLabel: {
     fontSize: 10,
-    opacity: 0.45,
+    color: 'rgba(255,255,255,0.35)',
     marginTop: 1,
   },
 });

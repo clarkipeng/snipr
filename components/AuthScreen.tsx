@@ -27,6 +27,7 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [confirmCode, setConfirmCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
@@ -75,6 +76,10 @@ export default function AuthScreen() {
   };
 
   const handleSignUp = async () => {
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -159,7 +164,7 @@ export default function AuthScreen() {
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={['rgba(39,116,174,0.2)', 'transparent', 'transparent']}
+        colors={['rgba(255,59,48,0.15)', 'transparent', 'transparent']}
         style={styles.gradient}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 0.6 }}
@@ -201,6 +206,19 @@ export default function AuthScreen() {
                   secureTextEntry
                   autoCapitalize="none"
                   textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                />
+              )}
+
+              {mode === 'signup' && (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  textContentType="newPassword"
                 />
               )}
 
@@ -256,14 +274,14 @@ export default function AuthScreen() {
 
             <View style={styles.toggleContainer}>
               {mode === 'login' && (
-                <Pressable onPress={() => { setError(''); setMode('signup'); }}>
+                <Pressable onPress={() => { setError(''); setConfirmPassword(''); setMode('signup'); }}>
                   <Text style={styles.toggleText}>
                     New here? <Text style={styles.toggleHighlight}>Sign up</Text>
                   </Text>
                 </Pressable>
               )}
               {mode === 'signup' && (
-                <Pressable onPress={() => { setError(''); setMode('login'); }}>
+                <Pressable onPress={() => { setError(''); setConfirmPassword(''); setMode('login'); }}>
                   <Text style={styles.toggleText}>
                     Already have an account? <Text style={styles.toggleHighlight}>Log in</Text>
                   </Text>
@@ -294,7 +312,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#0B0B0F',
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
@@ -346,13 +364,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   ctaButton: {
-    backgroundColor: '#2774AE',
+    backgroundColor: 'rgba(255,59,48,0.9)',
     borderRadius: 28,
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 6,
-    shadowColor: '#2774AE',
+    shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -381,7 +399,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   toggleHighlight: {
-    color: '#FFD100',
+    color: '#FF3B30',
     fontWeight: '700',
   },
 });

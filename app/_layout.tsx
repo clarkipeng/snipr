@@ -1,5 +1,5 @@
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, View } from 'react-native';
@@ -9,7 +9,6 @@ import 'react-native-url-polyfill/auto';
 
 import AuthScreen from '@/components/AuthScreen';
 import { PendingRequestsProvider } from '@/context/PendingRequestsContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
 
@@ -26,11 +25,22 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+const SniprDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#0B0B0F',
+    card: '#0B0B0F',
+    border: 'rgba(255,255,255,0.06)',
+    text: '#fff',
+    primary: '#FF3B30',
+  },
+};
+
 const client = generateClient<Schema>();
 
 function LayoutContent() {
   const { authStatus } = useAuthenticator((context) => [context.authStatus]);
-  const colorScheme = useColorScheme();
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -62,15 +72,15 @@ function LayoutContent() {
   if (authStatus === 'authenticated') {
     if (hasProfile == null) {
       return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0a' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0B0F' }}>
           <ActivityIndicator size="large" color="#FF3B30" />
-          <Text style={{ marginTop: 10, color: '#fff' }}>Checking Profile...</Text>
+          <Text style={{ marginTop: 10, color: 'rgba(255,255,255,0.6)' }}>Checking Profile...</Text>
         </View>
       );
     }
     if (hasProfile === false) {
       return (
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: '#0B0B0F' }}>
           <ProfileSetup onComplete={() => setHasProfile(true)} />
         </View>
       );
@@ -78,12 +88,20 @@ function LayoutContent() {
 
     return (
       <PendingRequestsProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={SniprDarkTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Profile' }} />
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: 'modal',
+                title: 'Profile',
+                headerStyle: { backgroundColor: '#0B0B0F' },
+                headerTintColor: '#fff',
+              }}
+            />
           </Stack>
-          <StatusBar style="auto" />
+          <StatusBar style="light" />
         </ThemeProvider>
       </PendingRequestsProvider>
     );

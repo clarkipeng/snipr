@@ -84,32 +84,31 @@ export default function SnipingScreen() {
     useEffect(() => {
         async function loadFriends() {
             try {
-                const attrs = await fetchUserAttributes();
+                const [attrs, { data: allUsers }, { data: friendships }] = await Promise.all([
+                    fetchUserAttributes(),
+                    client.models.UserProfile.list(),
+                    client.models.Friendship.list(),
+                ]);
+
                 const email = attrs.email;
                 if (!email) {
                     setStatus('Could not load user — please sign in again.');
                     return;
                 }
 
-                const { data: users } = await client.models.UserProfile.list({
-                    filter: { email: { eq: email } },
-                });
-                const me = users[0];
+                const me = allUsers.find(u => u.email === email);
                 if (!me) {
                     setStatus('No profile found. Please complete profile setup.');
                     return;
                 }
                 setCurrentUserProfile({ id: me.id, name: me.name });
 
-                const { data: friendships } = await client.models.Friendship.list({
-                    filter: { userId: { eq: me.id } },
-                });
-                const profiles = await Promise.all(
-                    friendships.map(f => client.models.UserProfile.get({ id: f.friendId }))
-                );
+                const userMap = new Map(allUsers.map(u => [u.id, u]));
+                const myFriendships = friendships.filter(f => f.userId === me.id);
+
                 setFriends(
-                    profiles
-                        .map(r => r.data)
+                    myFriendships
+                        .map(f => userMap.get(f.friendId))
                         .filter(Boolean)
                         .map(p => ({ id: p!.id, name: p!.name }))
                 );

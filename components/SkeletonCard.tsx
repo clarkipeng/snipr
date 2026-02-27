@@ -29,9 +29,9 @@ export function SkeletonCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(150, 150, 150, 0.12)',
-    borderRadius: 16,
-    marginBottom: 16,
+    backgroundColor: '#15151B',
+    borderRadius: 18,
+    marginBottom: 20,
     overflow: 'hidden',
   },
   header: {
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(150, 150, 150, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   lines: {
     gap: 6,
@@ -54,17 +54,17 @@ const styles = StyleSheet.create({
     height: 12,
     width: '55%',
     borderRadius: 6,
-    backgroundColor: 'rgba(150, 150, 150, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   subtitleLine: {
     height: 10,
     width: '35%',
     borderRadius: 5,
-    backgroundColor: 'rgba(150, 150, 150, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   image: {
     width: '100%',
     aspectRatio: 4 / 3,
-    backgroundColor: 'rgba(150, 150, 150, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
 });

@@ -48,20 +48,25 @@ function LayoutContent() {
     let cancelled = false;
     async function checkProfile() {
       if (authStatus === 'authenticated') {
-        const attributes = await fetchUserAttributes();
-        const email = attributes.email;
+        try {
+          const attributes = await fetchUserAttributes();
+          const email = attributes.email;
 
-        if (!email) {
+          if (!email) {
+            if (!cancelled) setHasProfile(false);
+            return;
+          }
+
+          const { data: profiles } = await client.models.UserProfile.list({
+            filter: { email: { eq: email } }
+          });
+
+          if (!cancelled) {
+            setHasProfile(profiles.length > 0);
+          }
+        } catch (error) {
+          console.error('Failed to check user profile:', error);
           if (!cancelled) setHasProfile(false);
-          return;
-        }
-
-        const { data: profiles } = await client.models.UserProfile.list({
-          filter: { email: { eq: email } }
-        });
-
-        if (!cancelled) {
-          setHasProfile(profiles.length > 0);
         }
       }
     }

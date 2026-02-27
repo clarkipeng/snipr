@@ -51,54 +51,58 @@ export default function FriendsScreen() {
     useFocusEffect(
         useCallback(() => {
             async function getFriendsAndUser() {
-                const [attributes, { data: users }, { data: friendshipRecords }, { data: requestRecords }] =
-                    await Promise.all([
-                        fetchUserAttributes(),
-                        client.models.UserProfile.list(),
-                        client.models.Friendship.list(),
-                        client.models.FriendRequest.list(),
-                    ]);
+                try {
+                    const [attributes, { data: users }, { data: friendshipRecords }, { data: requestRecords }] =
+                        await Promise.all([
+                            fetchUserAttributes(),
+                            client.models.UserProfile.list(),
+                            client.models.Friendship.list(),
+                            client.models.FriendRequest.list(),
+                        ]);
 
-                const currentEmail = attributes.email;
-                const currentUserProfile = users.find(u => u.email === currentEmail);
-                const currentUserId = currentUserProfile ? currentUserProfile.id : null;
-                if (currentUserId) {
-                    setUserId(currentUserId);
-                }
-
-                const map = new Map<string, Schema['UserProfile']['type']>();
-                users.forEach(u => map.set(u.id, u));
-                setAllUsersMap(map);
-
-                const friendIds = new Set(
-                    friendshipRecords
-                        .filter(f => f.userId === currentUserId)
-                        .map(f => f.friendId)
-                );
-
-                const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
-                const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
-                const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
-
-                const friendsList: Schema['UserProfile']['type'][] = [];
-                const nonFriendsList: Schema['UserProfile']['type'][] = [];
-
-                users.forEach(user => {
-                    if (!user) return;
-                    if (user.id === currentUserId) return;
-
-                    if (friendIds.has(user.id)) {
-                        friendsList.push(user);
-                    } else {
-                        nonFriendsList.push(user);
+                    const currentEmail = attributes.email;
+                    const currentUserProfile = users.find(u => u.email === currentEmail);
+                    const currentUserId = currentUserProfile ? currentUserProfile.id : null;
+                    if (currentUserId) {
+                        setUserId(currentUserId);
                     }
-                });
 
-                setFriends(friendsList);
-                setNonFriends(nonFriendsList);
-                setIncomingRequests(incoming);
-                setSentRequestIds(outgoingReceiverIds);
-                setPendingCount(incoming.length);
+                    const map = new Map<string, Schema['UserProfile']['type']>();
+                    users.forEach(u => map.set(u.id, u));
+                    setAllUsersMap(map);
+
+                    const friendIds = new Set(
+                        friendshipRecords
+                            .filter(f => f.userId === currentUserId)
+                            .map(f => f.friendId)
+                    );
+
+                    const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
+                    const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
+                    const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
+
+                    const friendsList: Schema['UserProfile']['type'][] = [];
+                    const nonFriendsList: Schema['UserProfile']['type'][] = [];
+
+                    users.forEach(user => {
+                        if (!user) return;
+                        if (user.id === currentUserId) return;
+
+                        if (friendIds.has(user.id)) {
+                            friendsList.push(user);
+                        } else {
+                            nonFriendsList.push(user);
+                        }
+                    });
+
+                    setFriends(friendsList);
+                    setNonFriends(nonFriendsList);
+                    setIncomingRequests(incoming);
+                    setSentRequestIds(outgoingReceiverIds);
+                    setPendingCount(incoming.length);
+                } catch (error) {
+                    console.error('Failed to load friends/requests:', error);
+                }
             }
             getFriendsAndUser();
         }, [])
@@ -106,56 +110,70 @@ export default function FriendsScreen() {
 
     const sendRequest = async (userToAdd: Schema['UserProfile']['type']) => {
         if (!userId) return;
-        await client.models.FriendRequest.create({
-            senderId: userId,
-            receiverId: userToAdd.id
-        });
-        setSentRequestIds(prev => new Set(prev).add(userToAdd.id));
+        try {
+            await client.models.FriendRequest.create({
+                senderId: userId,
+                receiverId: userToAdd.id
+            });
+            setSentRequestIds(prev => new Set(prev).add(userToAdd.id));
+        } catch (error) {
+            console.error('Failed to send friend request:', error);
+        }
     };
 
     const acceptRequest = async (request: Schema['FriendRequest']['type']) => {
         if (!userId) return;
+        try {
+            await client.models.Friendship.create({
+                userId: userId,
+                friendId: request.senderId
+            });
+            await client.models.Friendship.create({
+                userId: request.senderId,
+                friendId: userId
+            });
 
-        await client.models.Friendship.create({
-            userId: userId,
-            friendId: request.senderId
-        });
-        await client.models.Friendship.create({
-            userId: request.senderId,
-            friendId: userId
-        });
+            await client.models.FriendRequest.delete({ id: request.id });
 
-        await client.models.FriendRequest.delete({ id: request.id });
+            setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+            setPendingCount(Math.max(0, incomingRequests.length - 1));
 
-        setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
-        setPendingCount(Math.max(0, incomingRequests.length - 1));
-
-        const acceptedUser = allUsersMap.get(request.senderId);
-        if (acceptedUser) {
-            setFriends(prev => [...prev, acceptedUser]);
-            setNonFriends(prev => prev.filter(u => u.id !== request.senderId));
+            const acceptedUser = allUsersMap.get(request.senderId);
+            if (acceptedUser) {
+                setFriends(prev => [...prev, acceptedUser]);
+                setNonFriends(prev => prev.filter(u => u.id !== request.senderId));
+            }
+        } catch (error) {
+            console.error('Failed to accept friend request:', error);
         }
     };
 
     const rejectRequest = async (request: Schema['FriendRequest']['type']) => {
-        await client.models.FriendRequest.delete({ id: request.id });
-        setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
-        setPendingCount(Math.max(0, incomingRequests.length - 1));
+        try {
+            await client.models.FriendRequest.delete({ id: request.id });
+            setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+            setPendingCount(Math.max(0, incomingRequests.length - 1));
+        } catch (error) {
+            console.error('Failed to reject friend request:', error);
+        }
     };
 
     const removeFriend = async (friend: Schema['UserProfile']['type']) => {
         if (!userId) return;
+        try {
+            const { data: allFriendships } = await client.models.Friendship.list();
+            const toDelete = allFriendships.filter(
+                f =>
+                    (f.userId === userId && f.friendId === friend.id) ||
+                    (f.userId === friend.id && f.friendId === userId)
+            );
+            await Promise.all(toDelete.map(f => client.models.Friendship.delete({ id: f.id })));
 
-        const { data: allFriendships } = await client.models.Friendship.list();
-        const toDelete = allFriendships.filter(
-            f =>
-                (f.userId === userId && f.friendId === friend.id) ||
-                (f.userId === friend.id && f.friendId === userId)
-        );
-        await Promise.all(toDelete.map(f => client.models.Friendship.delete({ id: f.id })));
-
-        setFriends(prev => prev.filter(u => u.id !== friend.id));
-        setNonFriends(prev => [...prev, friend]);
+            setFriends(prev => prev.filter(u => u.id !== friend.id));
+            setNonFriends(prev => [...prev, friend]);
+        } catch (error) {
+            console.error('Failed to remove friend:', error);
+        }
     };
 
     const isSearching = activeTab === 'search' && searchQuery.length > 0;

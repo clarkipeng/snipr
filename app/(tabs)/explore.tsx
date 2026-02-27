@@ -16,6 +16,7 @@ import type { Schema } from '@/amplify/data/resource';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
 import { useRouter } from 'expo-router';
@@ -54,8 +55,21 @@ export default function LeaderboardScreen() {
         snipesReceived[snipe.targetId] = (snipesReceived[snipe.targetId] || 0) + 1;
       }
 
-      // Step 3: Fetch all user profiles
-      const { data: profiles } = await client.models.UserProfile.list();
+      // Step 3: Fetch all user profiles and filter to friends + self
+      const attributes = await fetchUserAttributes();
+      const { data: allUsers } = await client.models.UserProfile.list();
+      const currentUser = allUsers.find(u => u.email === attributes.email);
+      const currentUserId = currentUser?.id ?? null;
+
+      const { data: friendshipRecords } = await client.models.Friendship.list();
+      const friendIds = new Set(
+        friendshipRecords
+          .filter(f => f.userId === currentUserId)
+          .map(f => f.friendId)
+      );
+      if (currentUserId) friendIds.add(currentUserId);
+
+      const profiles = allUsers.filter(u => friendIds.has(u.id));
 
       // Step 4: Build leaderboard entries with profile picture URLs
       const leaderboard: LeaderboardEntry[] = await Promise.all(

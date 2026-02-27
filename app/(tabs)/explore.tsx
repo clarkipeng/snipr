@@ -6,7 +6,8 @@ import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -235,7 +236,11 @@ export default function LeaderboardScreen() {
     return () => clearInterval(interval);
   }, [entries]);
 
-  useEffect(() => { loadLeaderboard(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadLeaderboard();
+    }, [])
+  );
 
   function onRefresh() {
     setRefreshing(true);
@@ -245,7 +250,7 @@ export default function LeaderboardScreen() {
   const myRank = currentUserId ? entries.findIndex(e => e.id === currentUserId) + 1 : 0;
   const myEntry = currentUserId ? entries.find(e => e.id === currentUserId) ?? null : null;
 
-  if (loading) {
+  if (loading && entries.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.header}>Leaderboard</ThemedText>

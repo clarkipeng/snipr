@@ -1,36 +1,14 @@
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
+import { usePendingRequests } from '@/context/PendingRequestsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import type { Schema } from '@/amplify/data/resource';
-import { fetchUserAttributes } from 'aws-amplify/auth';
-import { generateClient } from 'aws-amplify/data';
 import { Tabs } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-
-const client = generateClient<Schema>();
+import React from 'react';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    async function fetchPendingRequests() {
-      try {
-        const attrs = await fetchUserAttributes();
-        const { data: users } = await client.models.UserProfile.list({
-          filter: { email: { eq: attrs.email } },
-        });
-        const me = users[0];
-        if (!me) return;
-        const { data: requests } = await client.models.FriendRequest.list({
-          filter: { receiverId: { eq: me.id } },
-        });
-        setPendingCount(requests.length);
-      } catch {}
-    }
-    fetchPendingRequests();
-  }, []);
+  const { pendingCount } = usePendingRequests();
 
   return (
     <Tabs

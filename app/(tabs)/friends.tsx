@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { type Schema } from "@/amplify/data/resource";
+import { usePendingRequests } from '@/context/PendingRequestsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useFocusEffect } from '@react-navigation/native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from "aws-amplify/data";
 import { getUrl } from 'aws-amplify/storage';
@@ -37,6 +39,7 @@ const UserAvatar = ({ path }: { path: string | null }) => {
 export default function FriendsScreen() {
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const { setPendingCount } = usePendingRequests();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'friends' | 'search' | 'requests'>('friends');
@@ -50,55 +53,58 @@ export default function FriendsScreen() {
     // To help lookup users quickly
     const [allUsersMap, setAllUsersMap] = useState<Map<string, Schema['UserProfile']['type']>>(new Map());
 
-    useEffect(() => {
-        async function getFriendsAndUser() {
-            const attributes = await fetchUserAttributes();
-            const currentEmail = attributes.email;
+    useFocusEffect(
+        useCallback(() => {
+            async function getFriendsAndUser() {
+                const attributes = await fetchUserAttributes();
+                const currentEmail = attributes.email;
 
-            const { data: users } = await client.models.UserProfile.list();
-            const currentUserProfile = users.find(u => u.email === currentEmail);
-            const currentUserId = currentUserProfile ? currentUserProfile.id : null;
-            if (currentUserId) {
-                setUserId(currentUserId);
-            }
-
-            const map = new Map<string, Schema['UserProfile']['type']>();
-            users.forEach(u => map.set(u.id, u));
-            setAllUsersMap(map);
-
-            const { data: friendshipRecords } = await client.models.Friendship.list();
-            const friendIds = new Set(
-                friendshipRecords
-                    .filter(f => f.userId === currentUserId)
-                    .map(f => f.friendId)
-            );
-
-            const { data: requestRecords } = await client.models.FriendRequest.list();
-            const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
-            const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
-            const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
-
-            const friendsList: Schema['UserProfile']['type'][] = [];
-            const nonFriendsList: Schema['UserProfile']['type'][] = [];
-
-            users.forEach(user => {
-                if (!user) return;
-                if (user.id === currentUserId) return;
-
-                if (friendIds.has(user.id)) {
-                    friendsList.push(user);
-                } else {
-                    nonFriendsList.push(user);
+                const { data: users } = await client.models.UserProfile.list();
+                const currentUserProfile = users.find(u => u.email === currentEmail);
+                const currentUserId = currentUserProfile ? currentUserProfile.id : null;
+                if (currentUserId) {
+                    setUserId(currentUserId);
                 }
-            });
 
-            setFriends(friendsList);
-            setNonFriends(nonFriendsList);
-            setIncomingRequests(incoming);
-            setSentRequestIds(outgoingReceiverIds);
-        }
-        getFriendsAndUser();
-    }, []);
+                const map = new Map<string, Schema['UserProfile']['type']>();
+                users.forEach(u => map.set(u.id, u));
+                setAllUsersMap(map);
+
+                const { data: friendshipRecords } = await client.models.Friendship.list();
+                const friendIds = new Set(
+                    friendshipRecords
+                        .filter(f => f.userId === currentUserId)
+                        .map(f => f.friendId)
+                );
+
+                const { data: requestRecords } = await client.models.FriendRequest.list();
+                const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
+                const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
+                const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
+
+                const friendsList: Schema['UserProfile']['type'][] = [];
+                const nonFriendsList: Schema['UserProfile']['type'][] = [];
+
+                users.forEach(user => {
+                    if (!user) return;
+                    if (user.id === currentUserId) return;
+
+                    if (friendIds.has(user.id)) {
+                        friendsList.push(user);
+                    } else {
+                        nonFriendsList.push(user);
+                    }
+                });
+
+                setFriends(friendsList);
+                setNonFriends(nonFriendsList);
+                setIncomingRequests(incoming);
+                setSentRequestIds(outgoingReceiverIds);
+                setPendingCount(incoming.length);
+            }
+            getFriendsAndUser();
+        }, [])
+    );
 
     const sendRequest = async (userToAdd: Schema['UserProfile']['type']) => {
         if (!userId) return;
@@ -124,6 +130,7 @@ export default function FriendsScreen() {
         await client.models.FriendRequest.delete({ id: request.id });
 
         setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+        setPendingCount(Math.max(0, incomingRequests.length - 1));
 
         const acceptedUser = allUsersMap.get(request.senderId);
         if (acceptedUser) {
@@ -135,6 +142,7 @@ export default function FriendsScreen() {
     const rejectRequest = async (request: Schema['FriendRequest']['type']) => {
         await client.models.FriendRequest.delete({ id: request.id });
         setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+        setPendingCount(Math.max(0, incomingRequests.length - 1));
     };
 
     const isSearching = activeTab === 'search' && searchQuery.length > 0;

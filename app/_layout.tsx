@@ -16,6 +16,7 @@ import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
+import { PendingRequestsProvider } from '@/context/PendingRequestsContext';
 import ProfileSetup from '../components/ProfileSetup';
 
 Amplify.configure(outputs);
@@ -81,13 +82,15 @@ function LayoutContent() {
     }
 
     return (
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Profile' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <PendingRequestsProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Profile' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </PendingRequestsProvider>
     );
   }
 

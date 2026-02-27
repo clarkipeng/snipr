@@ -6,7 +6,8 @@ import { ThemedView } from '@/components/themed-view';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
@@ -115,16 +116,18 @@ export default function HomeScreen() {
     }
   }
 
-  useEffect(() => {
-    loadFeed();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [])
+  );
 
   function onRefresh() {
     setRefreshing(true);
     loadFeed();
   }
 
-  if (loading) {
+  if (loading && feed.length === 0) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText type="title" style={styles.header}>Feed</ThemedText>

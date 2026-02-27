@@ -1,5 +1,6 @@
 import type { Schema } from '@/amplify/data/resource';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
+import { ModeToggle } from '@/components/ModeToggle';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { fetchUserAttributes } from 'aws-amplify/auth';
@@ -162,8 +163,11 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [displayMultiplier, setDisplayMultiplier] = useState(0);
+  const [mode, setMode] = useState<'friends' | 'global'>('friends');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  async function loadLeaderboard() {
+  async function loadLeaderboard(currentMode: 'friends' | 'global' = modeRef.current) {
     try {
       const { data: snipes } = await client.models.Snipe.list({
         selectionSet: ['sniperId', 'targetId'],
@@ -189,7 +193,9 @@ export default function LeaderboardScreen() {
       );
       if (currentUserIdLocal) friendIds.add(currentUserIdLocal);
 
-      const profiles = allUsers.filter(u => friendIds.has(u.id));
+      const profiles = currentMode === 'global'
+        ? allUsers
+        : allUsers.filter(u => friendIds.has(u.id));
 
       const leaderboard: LeaderboardEntry[] = await Promise.all(
         profiles.map(async (profile) => {
@@ -242,6 +248,10 @@ export default function LeaderboardScreen() {
     }, [])
   );
 
+  useEffect(() => {
+    loadLeaderboard(mode);
+  }, [mode]);
+
   function onRefresh() {
     setRefreshing(true);
     loadLeaderboard();
@@ -262,6 +272,7 @@ export default function LeaderboardScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.header}>Leaderboard</ThemedText>
+      <ModeToggle mode={mode} onModeChange={setMode} />
 
       <FlatList
         data={entries.slice(3)}

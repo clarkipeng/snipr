@@ -1,4 +1,5 @@
 import type { Schema } from '@/amplify/data/resource';
+import { ModeToggle } from '@/components/ModeToggle';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { SnipeCard } from '@/components/SnipeCard';
 import { ThemedText } from '@/components/themed-text';
@@ -7,7 +8,7 @@ import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { getUrl } from 'aws-amplify/storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
@@ -27,8 +28,11 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [mode, setMode] = useState<'friends' | 'global'>('friends');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  async function loadFeed() {
+  async function loadFeed(currentMode: 'friends' | 'global' = modeRef.current) {
     try {
       setError(null);
 
@@ -75,7 +79,9 @@ export default function HomeScreen() {
         selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
       });
 
-      const filtered = snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
+      const filtered = currentMode === 'global'
+        ? snipes
+        : snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
       const sorted = [...filtered]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 30);
@@ -122,6 +128,10 @@ export default function HomeScreen() {
     }, [])
   );
 
+  useEffect(() => {
+    loadFeed(mode);
+  }, [mode]);
+
   function onRefresh() {
     setRefreshing(true);
     loadFeed();
@@ -143,6 +153,7 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.header}>Feed</ThemedText>
+      <ModeToggle mode={mode} onModeChange={setMode} />
       {error && (
         <ThemedText style={styles.errorText}>{error}</ThemedText>
       )}

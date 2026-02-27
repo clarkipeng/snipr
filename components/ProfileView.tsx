@@ -32,31 +32,66 @@ type ProfileViewProps = {
   showSignOut?: boolean;
 };
 
+type FriendStatus = 'self' | 'friends' | 'request_sent' | 'not_friends';
+
 export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const { signOut } = useAuthenticator();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>('self');
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function loadProfile() {
       try {
+        const attributes = await fetchUserAttributes();
+        const currentEmail = attributes.email;
+
+        let meId: string | null = null;
+        if (currentEmail) {
+          const { data: meProfiles } = await client.models.UserProfile.list({
+            filter: { email: { eq: currentEmail } },
+          });
+          meId = meProfiles[0]?.id ?? null;
+          if (!cancelled) setCurrentUserId(meId);
+        }
+
         let targetProfile;
 
         if (userId) {
           const { data } = await client.models.UserProfile.get({ id: userId });
           targetProfile = data;
         } else {
-          const attributes = await fetchUserAttributes();
-          const email = attributes.email;
-          if (!email) return;
+          if (!currentEmail) return;
           const { data: profiles } = await client.models.UserProfile.list({
-            filter: { email: { eq: email } },
+            filter: { email: { eq: currentEmail } },
           });
           targetProfile = profiles[0] ?? null;
         }
 
         if (!targetProfile || cancelled) return;
+
+        if (!userId || userId === meId) {
+          if (!cancelled) setFriendStatus('self');
+        } else if (meId) {
+          const [{ data: friendships }, { data: requests }] = await Promise.all([
+            client.models.Friendship.list(),
+            client.models.FriendRequest.list(),
+          ]);
+
+          const isFriend = friendships.some(
+            f => f.userId === meId && f.friendId === targetProfile!.id
+          );
+          const hasSentRequest = requests.some(
+            r => r.senderId === meId && r.receiverId === targetProfile!.id
+          );
+
+          if (!cancelled) {
+            setFriendStatus(isFriend ? 'friends' : hasSentRequest ? 'request_sent' : 'not_friends');
+          }
+        }
 
         let profilePictureUrl: string | null = null;
         if (targetProfile.profilePicture) {
@@ -73,7 +108,6 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         if (cancelled) return;
 
-        // Set profile immediately so the screen shows without waiting for grid images
         setProfile({
           name: targetProfile.name,
           email: targetProfile.email,
@@ -83,7 +117,6 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           recentSnipeUrls: [],
         });
 
-        // Async: load up to 9 snipe thumbnails for the grid
         const sorted = [...made]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 9);
@@ -114,6 +147,22 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
     loadProfile();
     return () => { cancelled = true; };
   }, [userId]);
+
+  const sendFriendRequest = async () => {
+    if (!currentUserId || !userId) return;
+    setFriendActionLoading(true);
+    try {
+      await client.models.FriendRequest.create({
+        senderId: currentUserId,
+        receiverId: userId,
+      });
+      setFriendStatus('request_sent');
+    } catch (err) {
+      console.error('Failed to send friend request:', err);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -146,6 +195,30 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
         <ThemedText style={styles.email}>{profile.email}</ThemedText>
+
+        {friendStatus === 'friends' && (
+          <View style={[styles.friendButton, styles.friendButtonFriends]}>
+            <Text style={styles.friendButtonTextFriends}>Friends ✓</Text>
+          </View>
+        )}
+        {friendStatus === 'not_friends' && (
+          <TouchableOpacity
+            style={[styles.friendButton, styles.friendButtonAdd]}
+            onPress={sendFriendRequest}
+            disabled={friendActionLoading}
+          >
+            {friendActionLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.friendButtonTextAdd}>Add Friend</Text>
+            )}
+          </TouchableOpacity>
+        )}
+        {friendStatus === 'request_sent' && (
+          <View style={[styles.friendButton, styles.friendButtonPending]}>
+            <Text style={styles.friendButtonTextPending}>Request Sent</Text>
+          </View>
+        )}
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -269,6 +342,39 @@ const styles = StyleSheet.create({
     margin: 1,
   },
 
+  friendButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+  },
+  friendButtonAdd: {
+    backgroundColor: '#34C759',
+  },
+  friendButtonTextAdd: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  friendButtonFriends: {
+    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+  },
+  friendButtonTextFriends: {
+    color: '#888',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  friendButtonPending: {
+    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+  },
+  friendButtonTextPending: {
+    color: '#888',
+    fontWeight: '600',
+    fontSize: 15,
+  },
   emptySnipes: {
     alignItems: 'center',
     marginBottom: 32,

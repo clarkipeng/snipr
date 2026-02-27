@@ -1,12 +1,12 @@
 import type { Schema } from '@/amplify/data/resource';
+import { ModeToggle } from '@/components/ModeToggle';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { SnipeCard } from '@/components/SnipeCard';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { getCachedUrl } from '@/utils/url-cache';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
@@ -26,77 +26,56 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [mode, setMode] = useState<'friends' | 'global'>('friends');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  async function loadFeed() {
+  async function loadFeed(currentMode: 'friends' | 'global' = modeRef.current) {
     try {
       setError(null);
 
-      const attributes = await fetchUserAttributes();
-      const { data: allUsers } = await client.models.UserProfile.list();
+      const [attributes, { data: allUsers }, { data: friendshipRecords }, { data: snipes }] =
+        await Promise.all([
+          fetchUserAttributes(),
+          client.models.UserProfile.list(),
+          client.models.Friendship.list(),
+          client.models.Snipe.list({
+            selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
+          }),
+        ]);
+
       const currentUser = allUsers.find(u => u.email === attributes.email);
       const currentUserId = currentUser?.id ?? null;
 
-      const { data: friendshipRecords } = await client.models.Friendship.list();
       const friendIds = new Set(
         friendshipRecords
           .filter(f => f.userId === currentUserId)
           .map(f => f.friendId)
       );
 
-      // Build O(1) lookup map from pre-fetched users
       const userMap = new Map(allUsers.map(u => [u.id, u]));
 
-      function getProfileName(id: string): string {
-        return userMap.get(id)?.name ?? 'Unknown';
-      }
-
-      // Cache signed profile picture URLs so each sniper's pic is only fetched once
-      const picUrlCache = new Map<string, string | null>();
-      async function getProfilePicUrl(id: string): Promise<string | null> {
-        if (picUrlCache.has(id)) return picUrlCache.get(id)!;
-        const user = userMap.get(id);
-        if (!user?.profilePicture) {
-          picUrlCache.set(id, null);
-          return null;
-        }
-        try {
-          const result = await getUrl({ path: user.profilePicture });
-          const url = result.url.toString();
-          picUrlCache.set(id, url);
-          return url;
-        } catch {
-          picUrlCache.set(id, null);
-          return null;
-        }
-      }
-
-      const { data: snipes } = await client.models.Snipe.list({
-        selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
-      });
-
-      const filtered = snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
+      const filtered = currentMode === 'global'
+        ? snipes
+        : snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
       const sorted = [...filtered]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 30);
 
       const items: FeedItem[] = await Promise.all(
         sorted.map(async (snipe) => {
+          const user = userMap.get(snipe.sniperId);
+          const profilePicPath = user?.profilePicture;
+
           const [sniperProfilePictureUrl, imageUrl] = await Promise.all([
-            getProfilePicUrl(snipe.sniperId),
-            (async () => {
-              try {
-                const result = await getUrl({ path: snipe.imageKey });
-                return result.url.toString();
-              } catch {
-                return null;
-              }
-            })(),
+            profilePicPath ? getCachedUrl(profilePicPath) : Promise.resolve(null),
+            getCachedUrl(snipe.imageKey),
           ]);
 
           return {
             id: snipe.id,
-            sniperName: getProfileName(snipe.sniperId),
-            targetName: getProfileName(snipe.targetId),
+            sniperName: userMap.get(snipe.sniperId)?.name ?? 'Unknown',
+            targetName: userMap.get(snipe.targetId)?.name ?? 'Unknown',
             sniperProfilePictureUrl,
             imageUrl,
             caption: snipe.caption ?? null,
@@ -115,33 +94,40 @@ export default function HomeScreen() {
     }
   }
 
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [])
+  );
+
   useEffect(() => {
-    loadFeed();
-  }, []);
+    loadFeed(mode);
+  }, [mode]);
 
   function onRefresh() {
     setRefreshing(true);
     loadFeed();
   }
 
-  if (loading) {
+  if (loading && feed.length === 0) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.header}>Feed</ThemedText>
+      <View style={styles.container}>
+        <Text style={styles.header}>MISSION FEED</Text>
         <View style={styles.listContent}>
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </View>
-      </ThemedView>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.header}>Feed</ThemedText>
+    <View style={styles.container}>
+      <Text style={styles.header}>MISSION FEED</Text>
+      <ModeToggle mode={mode} onModeChange={setMode} />
       {error && (
-        <ThemedText style={styles.errorText}>{error}</ThemedText>
+        <Text style={styles.errorText}>{error}</Text>
       )}
       <FlatList
         data={feed}
@@ -168,35 +154,43 @@ export default function HomeScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🎯</Text>
-            <ThemedText style={styles.emptyTitle}>Nothing here yet</ThemedText>
-            <ThemedText style={styles.emptySubtitle}>Add friends and start sniping!</ThemedText>
+            <Text style={styles.emptyTitle}>Nothing here yet</Text>
+            <Text style={styles.emptySubtitle}>Add friends and start sniping!</Text>
           </View>
         }
       />
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#0B0B0F',
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 12,
+    paddingTop: 64,
+    paddingBottom: 14,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: '#fff',
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   errorText: {
-    color: '#ff3b30',
+    color: '#FF3B30',
     paddingHorizontal: 20,
     paddingBottom: 8,
     fontSize: 14,
+    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     gap: 8,
   },
   emptyEmoji: {
@@ -205,11 +199,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   emptySubtitle: {
     fontSize: 14,
-    opacity: 0.5,
+    color: 'rgba(255,255,255,0.45)',
     textAlign: 'center',
   },
 });

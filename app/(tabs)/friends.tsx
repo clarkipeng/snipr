@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { type Schema } from "@/amplify/data/resource";
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePendingRequests } from '@/context/PendingRequestsContext';
+import { getCachedUrl } from '@/utils/url-cache';
+import { useFocusEffect } from '@react-navigation/native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from "aws-amplify/data";
-import { getUrl } from 'aws-amplify/storage';
 
 const client = generateClient<Schema>();
 
@@ -13,20 +14,19 @@ const UserAvatar = ({ path }: { path: string | null }) => {
     const [uri, setUri] = useState<string | null>(null);
 
     useEffect(() => {
+        let cancelled = false;
         if (!path) {
             setUri(null);
             return;
         }
-        async function fetchImage() {
-            if (!path) return;
-            if (path.startsWith('http')) {
-                setUri(path);
-                return;
-            }
-            const result = await getUrl({ path });
-            setUri(result.url.toString());
+        if (path.startsWith('http')) {
+            setUri(path);
+            return;
         }
-        fetchImage();
+        getCachedUrl(path).then(url => {
+            if (!cancelled) setUri(url);
+        });
+        return () => { cancelled = true; };
     }, [path]);
 
     if (!uri) return <View style={styles.avatarPlaceholder} />;
@@ -35,8 +35,7 @@ const UserAvatar = ({ path }: { path: string | null }) => {
 };
 
 export default function FriendsScreen() {
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === 'dark';
+    const { setPendingCount } = usePendingRequests();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'friends' | 'search' | 'requests'>('friends');
@@ -47,58 +46,63 @@ export default function FriendsScreen() {
     const [sentRequestIds, setSentRequestIds] = useState<Set<string>>(new Set());
     const [userId, setUserId] = useState<string | null>(null);
 
-    // To help lookup users quickly
     const [allUsersMap, setAllUsersMap] = useState<Map<string, Schema['UserProfile']['type']>>(new Map());
 
-    useEffect(() => {
-        async function getFriendsAndUser() {
-            const attributes = await fetchUserAttributes();
-            const currentEmail = attributes.email;
+    useFocusEffect(
+        useCallback(() => {
+            async function getFriendsAndUser() {
+                const [attributes, { data: users }, { data: friendshipRecords }, { data: requestRecords }] =
+                    await Promise.all([
+                        fetchUserAttributes(),
+                        client.models.UserProfile.list(),
+                        client.models.Friendship.list(),
+                        client.models.FriendRequest.list(),
+                    ]);
 
-            const { data: users } = await client.models.UserProfile.list();
-            const currentUserProfile = users.find(u => u.email === currentEmail);
-            const currentUserId = currentUserProfile ? currentUserProfile.id : null;
-            if (currentUserId) {
-                setUserId(currentUserId);
-            }
-
-            const map = new Map<string, Schema['UserProfile']['type']>();
-            users.forEach(u => map.set(u.id, u));
-            setAllUsersMap(map);
-
-            const { data: friendshipRecords } = await client.models.Friendship.list();
-            const friendIds = new Set(
-                friendshipRecords
-                    .filter(f => f.userId === currentUserId)
-                    .map(f => f.friendId)
-            );
-
-            const { data: requestRecords } = await client.models.FriendRequest.list();
-            const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
-            const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
-            const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
-
-            const friendsList: Schema['UserProfile']['type'][] = [];
-            const nonFriendsList: Schema['UserProfile']['type'][] = [];
-
-            users.forEach(user => {
-                if (!user) return;
-                if (user.id === currentUserId) return;
-
-                if (friendIds.has(user.id)) {
-                    friendsList.push(user);
-                } else {
-                    nonFriendsList.push(user);
+                const currentEmail = attributes.email;
+                const currentUserProfile = users.find(u => u.email === currentEmail);
+                const currentUserId = currentUserProfile ? currentUserProfile.id : null;
+                if (currentUserId) {
+                    setUserId(currentUserId);
                 }
-            });
 
-            setFriends(friendsList);
-            setNonFriends(nonFriendsList);
-            setIncomingRequests(incoming);
-            setSentRequestIds(outgoingReceiverIds);
-        }
-        getFriendsAndUser();
-    }, []);
+                const map = new Map<string, Schema['UserProfile']['type']>();
+                users.forEach(u => map.set(u.id, u));
+                setAllUsersMap(map);
+
+                const friendIds = new Set(
+                    friendshipRecords
+                        .filter(f => f.userId === currentUserId)
+                        .map(f => f.friendId)
+                );
+
+                const incoming = requestRecords.filter(r => r.receiverId === currentUserId);
+                const outgoing = requestRecords.filter(r => r.senderId === currentUserId);
+                const outgoingReceiverIds = new Set(outgoing.map(r => r.receiverId));
+
+                const friendsList: Schema['UserProfile']['type'][] = [];
+                const nonFriendsList: Schema['UserProfile']['type'][] = [];
+
+                users.forEach(user => {
+                    if (!user) return;
+                    if (user.id === currentUserId) return;
+
+                    if (friendIds.has(user.id)) {
+                        friendsList.push(user);
+                    } else {
+                        nonFriendsList.push(user);
+                    }
+                });
+
+                setFriends(friendsList);
+                setNonFriends(nonFriendsList);
+                setIncomingRequests(incoming);
+                setSentRequestIds(outgoingReceiverIds);
+                setPendingCount(incoming.length);
+            }
+            getFriendsAndUser();
+        }, [])
+    );
 
     const sendRequest = async (userToAdd: Schema['UserProfile']['type']) => {
         if (!userId) return;
@@ -124,6 +128,7 @@ export default function FriendsScreen() {
         await client.models.FriendRequest.delete({ id: request.id });
 
         setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+        setPendingCount(Math.max(0, incomingRequests.length - 1));
 
         const acceptedUser = allUsersMap.get(request.senderId);
         if (acceptedUser) {
@@ -135,6 +140,22 @@ export default function FriendsScreen() {
     const rejectRequest = async (request: Schema['FriendRequest']['type']) => {
         await client.models.FriendRequest.delete({ id: request.id });
         setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
+        setPendingCount(Math.max(0, incomingRequests.length - 1));
+    };
+
+    const removeFriend = async (friend: Schema['UserProfile']['type']) => {
+        if (!userId) return;
+
+        const { data: allFriendships } = await client.models.Friendship.list();
+        const toDelete = allFriendships.filter(
+            f =>
+                (f.userId === userId && f.friendId === friend.id) ||
+                (f.userId === friend.id && f.friendId === userId)
+        );
+        await Promise.all(toDelete.map(f => client.models.Friendship.delete({ id: f.id })));
+
+        setFriends(prev => prev.filter(u => u.id !== friend.id));
+        setNonFriends(prev => [...prev, friend]);
     };
 
     const isSearching = activeTab === 'search' && searchQuery.length > 0;
@@ -154,6 +175,14 @@ export default function FriendsScreen() {
                     <Text style={styles.friendName}>{item.name}</Text>
                     <Text style={styles.friendEmail}>{item.email}</Text>
                 </View>
+                {activeTab === 'friends' && (
+                    <TouchableOpacity
+                        onPress={() => removeFriend(item)}
+                        style={[styles.actionButton, styles.unfriendButton]}
+                    >
+                        <Text style={styles.actionButtonText}>Unfriend</Text>
+                    </TouchableOpacity>
+                )}
                 {activeTab === 'search' && (
                     <TouchableOpacity
                         onPress={() => hasSentRequest ? null : sendRequest(item)}
@@ -194,41 +223,32 @@ export default function FriendsScreen() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Friends</Text>
-            </View>
+            <Text style={styles.title}>FRIENDS</Text>
 
-            <View style={[styles.tabContainer, isDark && styles.tabContainerDark]}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'friends' && (isDark ? styles.activeTabDark : styles.activeTab)]}
-                    onPress={() => setActiveTab('friends')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'friends' && styles.activeTabText]}>My Friends</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'search' && (isDark ? styles.activeTabDark : styles.activeTab)]}
-                    onPress={() => setActiveTab('search')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'search' && styles.activeTabText]}>Add Friends</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'requests' && (isDark ? styles.activeTabDark : styles.activeTab)]}
-                    onPress={() => setActiveTab('requests')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>
-                        Requests {incomingRequests.length > 0 ? `(${incomingRequests.length})` : ''}
-                    </Text>
-                </TouchableOpacity>
+            <View style={styles.tabContainer}>
+                {(['friends', 'search', 'requests'] as const).map(tab => (
+                    <TouchableOpacity
+                        key={tab}
+                        style={styles.tab}
+                        onPress={() => setActiveTab(tab)}
+                    >
+                        <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                            {tab === 'friends' ? 'MY FRIENDS' : tab === 'search' ? 'ADD' : `REQUESTS${incomingRequests.length > 0 ? ` (${incomingRequests.length})` : ''}`}
+                        </Text>
+                        {activeTab === tab && <View style={styles.tabUnderline} />}
+                    </TouchableOpacity>
+                ))}
             </View>
+            <View style={styles.tabDivider} />
 
             {activeTab === 'search' && (
                 <View style={styles.searchContainer}>
                     <TextInput
-                        style={[styles.searchInput, isDark && styles.searchInputDark]}
+                        style={styles.searchInput}
                         placeholder="Search for users..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        placeholderTextColor="#888"
+                        placeholderTextColor="rgba(255,255,255,0.35)"
                     />
                 </View>
             )}
@@ -249,7 +269,7 @@ export default function FriendsScreen() {
                     keyExtractor={(item) => item.id}
                     renderItem={renderFriendOrUserItem}
                     style={styles.list}
-                    ListEmptyComponent={<Text style={styles.emptyText}>{searchQuery.length > 0 ? 'No non-friends found.' : 'Type a name or email to search.'}</Text>}
+                    ListEmptyComponent={<Text style={styles.emptyText}>{searchQuery.length > 0 ? 'No users found.' : 'Type a name or email to search.'}</Text>}
                 />
             )}
 
@@ -269,72 +289,58 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 20,
-        paddingTop: 60,
-    },
-    header: {
-        marginBottom: 20,
+        backgroundColor: '#0B0B0F',
+        paddingHorizontal: 20,
+        paddingTop: 64,
     },
     title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-    },
-    searchContainer: {
-        flexDirection: 'row',
-        marginBottom: 20,
-    },
-    searchInput: {
-        flex: 1,
-        height: 50,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 25,
-        paddingHorizontal: 20,
-        fontSize: 16,
-        color: '#111',
-    },
-    searchInputDark: {
-        backgroundColor: '#1c1c1e',
-        color: '#f0f0f0',
+        fontSize: 26,
+        fontWeight: '900',
+        color: '#fff',
+        letterSpacing: 2,
+        marginBottom: 14,
     },
     tabContainer: {
         flexDirection: 'row',
-        marginBottom: 20,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 25,
-        padding: 4,
-    },
-    tabContainerDark: {
-        backgroundColor: '#1c1c1e',
+        gap: 20,
     },
     tab: {
-        flex: 1,
-        paddingVertical: 10,
+        paddingBottom: 10,
         alignItems: 'center',
-        borderRadius: 21,
-    },
-    activeTab: {
-        backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    activeTabDark: {
-        backgroundColor: '#2c2c2e',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 2,
     },
     tabText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#888',
+        fontSize: 12,
+        fontWeight: '700',
+        letterSpacing: 1.2,
+        color: 'rgba(255,255,255,0.4)',
     },
     activeTabText: {
-        color: '#000',
+        color: '#fff',
+    },
+    tabUnderline: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: 'rgba(255,59,48,0.9)',
+        borderRadius: 1,
+    },
+    tabDivider: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        marginBottom: 8,
+    },
+    searchContainer: {
+        marginVertical: 12,
+    },
+    searchInput: {
+        height: 46,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        borderRadius: 14,
+        paddingHorizontal: 18,
+        fontSize: 16,
+        color: '#fff',
     },
     list: {
         flex: 1,
@@ -342,36 +348,38 @@ const styles = StyleSheet.create({
     friendItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        paddingVertical: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(255,255,255,0.06)',
     },
     userInfo: {
         flex: 1,
     },
     avatarPlaceholder: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: '#ddd',
-        marginRight: 15,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginRight: 14,
     },
     avatarImage: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        marginRight: 15,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        marginRight: 14,
     },
     friendName: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '600',
+        color: '#fff',
     },
     friendEmail: {
-        color: '#666',
-        fontSize: 14,
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 13,
+        marginTop: 2,
     },
     actionButton: {
-        backgroundColor: '#000',
+        backgroundColor: 'rgba(255,255,255,0.1)',
         justifyContent: 'center',
         paddingVertical: 6,
         paddingHorizontal: 16,
@@ -379,18 +387,21 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     disabledButton: {
-        backgroundColor: '#ccc',
+        backgroundColor: 'rgba(255,255,255,0.05)',
     },
     acceptButton: {
         backgroundColor: '#34C759',
     },
     rejectButton: {
-        backgroundColor: '#FF3B30',
+        backgroundColor: 'rgba(255,59,48,0.9)',
+    },
+    unfriendButton: {
+        backgroundColor: 'rgba(255,59,48,0.9)',
     },
     actionButtonText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 13,
     },
     requestActions: {
         flexDirection: 'row',
@@ -398,8 +409,8 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         textAlign: 'center',
-        color: '#888',
+        color: 'rgba(255,255,255,0.4)',
         marginTop: 40,
-        fontSize: 16,
+        fontSize: 15,
     },
 });

@@ -1,10 +1,8 @@
 import type { Schema } from '@/amplify/data/resource';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { getCachedUrl } from '@/utils/url-cache';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -32,45 +30,65 @@ type ProfileViewProps = {
   showSignOut?: boolean;
 };
 
+type FriendStatus = 'self' | 'friends' | 'request_sent' | 'not_friends';
+
 export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const { signOut } = useAuthenticator();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>('self');
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadProfile() {
       try {
-        let targetProfile;
-
-        if (userId) {
-          const { data } = await client.models.UserProfile.get({ id: userId });
-          targetProfile = data;
-        } else {
-          const attributes = await fetchUserAttributes();
-          const email = attributes.email;
-          if (!email) return;
-          const { data: profiles } = await client.models.UserProfile.list({
-            filter: { email: { eq: email } },
-          });
-          targetProfile = profiles[0] ?? null;
-        }
-
-        if (!targetProfile) return;
-
-        let profilePictureUrl: string | null = null;
-        if (targetProfile.profilePicture) {
-          try {
-            const result = await getUrl({ path: targetProfile.profilePicture });
-            profilePictureUrl = result.url.toString();
-          } catch {}
-        }
-
-        const [{ data: made }, { data: received }] = await Promise.all([
-          client.models.Snipe.list({ filter: { sniperId: { eq: targetProfile.id } } }),
-          client.models.Snipe.list({ filter: { targetId: { eq: targetProfile.id } } }),
+        const [attributes, { data: allUsers }] = await Promise.all([
+          fetchUserAttributes(),
+          client.models.UserProfile.list(),
         ]);
 
-        // Set profile immediately so the screen shows without waiting for grid images
+        const currentEmail = attributes.email;
+        const userMap = new Map(allUsers.map(u => [u.id, u]));
+        const me = allUsers.find(u => u.email === currentEmail);
+        const meId = me?.id ?? null;
+        if (!cancelled) setCurrentUserId(meId);
+
+        const targetProfile = userId
+          ? userMap.get(userId) ?? null
+          : me ?? null;
+
+        if (!targetProfile || cancelled) return;
+
+        const isViewingSelf = !userId || userId === meId;
+
+        const [{ data: made }, { data: received }, friendStatusResult] = await Promise.all([
+          client.models.Snipe.list({ filter: { sniperId: { eq: targetProfile.id } } }),
+          client.models.Snipe.list({ filter: { targetId: { eq: targetProfile.id } } }),
+          isViewingSelf || !meId
+            ? Promise.resolve(null)
+            : Promise.all([
+                client.models.Friendship.list({ filter: { userId: { eq: meId } } }),
+                client.models.FriendRequest.list({ filter: { senderId: { eq: meId } } }),
+              ]),
+        ]);
+
+        if (cancelled) return;
+
+        if (isViewingSelf) {
+          setFriendStatus('self');
+        } else if (friendStatusResult) {
+          const [{ data: friendships }, { data: requests }] = friendStatusResult;
+          const isFriend = friendships.some(f => f.friendId === targetProfile.id);
+          const hasSentRequest = requests.some(r => r.receiverId === targetProfile.id);
+          setFriendStatus(isFriend ? 'friends' : hasSentRequest ? 'request_sent' : 'not_friends');
+        }
+
+        const profilePictureUrl = targetProfile.profilePicture
+          ? await getCachedUrl(targetProfile.profilePicture)
+          : null;
+
         setProfile({
           name: targetProfile.name,
           email: targetProfile.email,
@@ -80,90 +98,131 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           recentSnipeUrls: [],
         });
 
-        // Async: load up to 9 snipe thumbnails for the grid
         const sorted = [...made]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
           .slice(0, 9);
 
         const urls = (
-          await Promise.all(
-            sorted.map(async (snipe) => {
-              try {
-                const result = await getUrl({ path: snipe.imageKey });
-                return result.url.toString();
-              } catch {
-                return null;
-              }
-            })
-          )
+          await Promise.all(sorted.map(snipe => getCachedUrl(snipe.imageKey)))
         ).filter((u): u is string => u !== null);
 
-        setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        if (!cancelled) {
+          setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        }
       } catch (err) {
         console.error('Failed to load profile:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     loadProfile();
+    return () => { cancelled = true; };
   }, [userId]);
+
+  const sendFriendRequest = async () => {
+    if (!currentUserId || !userId) return;
+    setFriendActionLoading(true);
+    try {
+      await client.models.FriendRequest.create({
+        senderId: currentUserId,
+        receiverId: userId,
+      });
+      setFriendStatus('request_sent');
+    } catch (err) {
+      console.error('Failed to send friend request:', err);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
-      <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" />
-      </ThemedView>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#FF3B30" />
+      </View>
     );
   }
 
   if (!profile) {
     return (
-      <ThemedView style={styles.centered}>
-        <ThemedText>Could not load profile.</ThemedText>
-      </ThemedView>
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Could not load profile.</Text>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.outer}>
+    <View style={styles.outer}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {profile.profilePictureUrl ? (
           <Image source={{ uri: profile.profilePictureUrl }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <ThemedText style={styles.avatarInitial}>
+            <Text style={styles.avatarInitial}>
               {profile.name.charAt(0).toUpperCase()}
-            </ThemedText>
+            </Text>
           </View>
         )}
 
-        <ThemedText type="title" style={styles.name}>{profile.name}</ThemedText>
-        <ThemedText style={styles.email}>{profile.email}</ThemedText>
+        <Text style={styles.name}>{profile.name}</Text>
+        <Text style={styles.email}>{profile.email}</Text>
+
+        {friendStatus === 'friends' && (
+          <View style={[styles.friendButton, styles.friendButtonFriends]}>
+            <Text style={styles.friendButtonTextFriends}>Friends ✓</Text>
+          </View>
+        )}
+        {friendStatus === 'not_friends' && (
+          <TouchableOpacity
+            style={[styles.friendButton, styles.friendButtonAdd]}
+            onPress={sendFriendRequest}
+            disabled={friendActionLoading}
+          >
+            {friendActionLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.friendButtonTextAdd}>Add Friend</Text>
+            )}
+          </TouchableOpacity>
+        )}
+        {friendStatus === 'request_sent' && (
+          <View style={[styles.friendButton, styles.friendButtonPending]}>
+            <Text style={styles.friendButtonTextPending}>Request Sent</Text>
+          </View>
+        )}
 
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>{profile.snipesMade}</ThemedText>
-            <ThemedText style={styles.statLabel}>Snipes</ThemedText>
+            <Text style={styles.statNumber}>{profile.snipesMade}</Text>
+            <Text style={styles.statLabel}>Snipes</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>{profile.snipesReceived}</ThemedText>
-            <ThemedText style={styles.statLabel}>Sniped</ThemedText>
+            <Text style={styles.statNumber}>{profile.snipesReceived}</Text>
+            <Text style={styles.statLabel}>Sniped</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
-            <ThemedText style={styles.statNumber}>
+            <Text style={styles.statNumber}>
               {profile.snipesMade - profile.snipesReceived}
-            </ThemedText>
-            <ThemedText style={styles.statLabel}>Net</ThemedText>
+            </Text>
+            <Text style={styles.statLabel}>Net</Text>
           </View>
         </View>
 
-        {/* Recent snipes grid */}
+        {profile.snipesMade === 0 && profile.snipesReceived === 0 && (
+          <View style={styles.emptySnipes}>
+            <Text style={styles.emptySnipesEmoji}>🥷</Text>
+            <Text style={styles.emptySnipesText}>
+              No snipes yet — still lurking in the shadows...
+            </Text>
+          </View>
+        )}
+
         {profile.recentSnipeUrls.length > 0 && (
           <View style={styles.gridSection}>
-            <ThemedText style={styles.gridTitle}>Snipes</ThemedText>
+            <Text style={styles.gridTitle}>Snipes</Text>
             <View style={styles.grid}>
               {profile.recentSnipeUrls.map((url, i) => (
                 <Image key={i} source={{ uri: url }} style={styles.gridImage} />
@@ -174,16 +233,16 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         {showSignOut && (
           <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-            <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
+            <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: { flex: 1 },
+  outer: { flex: 1, backgroundColor: '#0B0B0F' },
   container: {
     alignItems: 'center',
     paddingTop: 60,
@@ -194,6 +253,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#0B0B0F',
+  },
+  errorText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 16,
   },
   avatar: {
     width: 110,
@@ -201,29 +265,33 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     marginBottom: 16,
     borderWidth: 3,
-    borderColor: 'rgba(150, 150, 150, 0.25)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(150, 150, 150, 0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitial: {
     fontSize: 42,
     fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
   },
   name: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
     marginBottom: 4,
   },
   email: {
     fontSize: 14,
-    opacity: 0.5,
-    marginBottom: 32,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 24,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    backgroundColor: '#15151B',
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
@@ -231,17 +299,16 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   statBox: { flex: 1, alignItems: 'center' },
-  statNumber: { fontSize: 24, fontWeight: '800' },
-  statLabel: { fontSize: 12, opacity: 0.5, marginTop: 4 },
+  statNumber: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 },
   statDivider: {
     width: StyleSheet.hairlineWidth,
     height: 40,
-    backgroundColor: 'rgba(150, 150, 150, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
 
-  // Photo grid
   gridSection: { width: '100%', marginBottom: 32 },
-  gridTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  gridTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10, color: '#fff' },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -249,13 +316,59 @@ const styles = StyleSheet.create({
   gridImage: {
     width: '32.5%',
     aspectRatio: 1,
-    borderRadius: 4,
-    backgroundColor: '#222',
+    borderRadius: 6,
+    backgroundColor: '#15151B',
     margin: 1,
   },
 
+  friendButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+  },
+  friendButtonAdd: {
+    backgroundColor: '#34C759',
+  },
+  friendButtonTextAdd: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  friendButtonFriends: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  friendButtonTextFriends: {
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  friendButtonPending: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  friendButtonTextPending: {
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  emptySnipes: {
+    alignItems: 'center',
+    marginBottom: 32,
+    gap: 8,
+  },
+  emptySnipesEmoji: {
+    fontSize: 40,
+  },
+  emptySnipesText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+  },
   signOutButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    backgroundColor: 'rgba(255,59,48,0.12)',
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 12,

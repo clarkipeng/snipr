@@ -1,12 +1,12 @@
 import type { Schema } from '@/amplify/data/resource';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { ModeToggle } from '@/components/ModeToggle';
+import { getCachedUrl } from '@/utils/url-cache';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
@@ -28,8 +28,6 @@ type LeaderboardEntry = {
   timesSnipedCount: number;
 };
 
-// ─── Skeleton row ────────────────────────────────────────────────────────────
-
 function SkeletonRow() {
   const opacity = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
@@ -39,7 +37,7 @@ function SkeletonRow() {
         Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
       ])
     ).start();
-  }, [opacity]);
+  }, []);
 
   return (
     <Animated.View style={[skeletonStyles.row, { opacity }]}>
@@ -61,15 +59,13 @@ const skeletonStyles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.15)',
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  badge: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(150,150,150,0.2)' },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(150,150,150,0.2)' },
-  lineA: { height: 13, width: '50%', borderRadius: 6, backgroundColor: 'rgba(150,150,150,0.25)' },
-  lineB: { height: 10, width: '35%', borderRadius: 5, backgroundColor: 'rgba(150,150,150,0.15)' },
+  badge: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.08)' },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.08)' },
+  lineA: { height: 13, width: '50%', borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.08)' },
+  lineB: { height: 10, width: '35%', borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.05)' },
 });
-
-// ─── Podium for top 3 ────────────────────────────────────────────────────────
 
 function Podium({
   top3,
@@ -82,11 +78,10 @@ function Podium({
 }) {
   if (top3.length === 0) return null;
 
-  // Order on screen: 2nd | 1st | 3rd  (classic podium layout)
   const slots = [
-    { entry: top3[1] ?? null, medal: '🥈', blockHeight: 82, bg: 'rgba(192,192,192,0.18)' },
-    { entry: top3[0] ?? null, medal: '🥇', blockHeight: 112, bg: 'rgba(255,215,0,0.18)' },
-    { entry: top3[2] ?? null, medal: '🥉', blockHeight: 58,  bg: 'rgba(205,127,50,0.18)' },
+    { entry: top3[1] ?? null, medal: '🥈', blockHeight: 82, bg: 'rgba(192,192,192,0.12)' },
+    { entry: top3[0] ?? null, medal: '🥇', blockHeight: 112, bg: 'rgba(255,215,0,0.12)' },
+    { entry: top3[2] ?? null, medal: '🥉', blockHeight: 58,  bg: 'rgba(205,127,50,0.12)' },
   ];
 
   return (
@@ -107,12 +102,12 @@ function Podium({
                 <Text style={podiumStyles.avatarInitial}>{entry.name.charAt(0).toUpperCase()}</Text>
               </View>
             )}
-            <ThemedText style={podiumStyles.name} numberOfLines={1}>
+            <Text style={podiumStyles.name} numberOfLines={1}>
               {entry.name.split(' ')[0]}
-            </ThemedText>
-            <ThemedText style={podiumStyles.score}>
+            </Text>
+            <Text style={podiumStyles.score}>
               {Math.round(entry.snipeCount * displayMultiplier)}
-            </ThemedText>
+            </Text>
             <View style={[podiumStyles.block, { height: blockHeight, backgroundColor: bg }]}>
               <Text style={podiumStyles.medal}>{medal}</Text>
             </View>
@@ -134,13 +129,13 @@ const podiumStyles = StyleSheet.create({
   column: { flex: 1, alignItems: 'center' },
   avatar: { width: 52, height: 52, borderRadius: 26, marginBottom: 6 },
   avatarPlaceholder: {
-    backgroundColor: 'rgba(150,150,150,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarInitial: { fontWeight: '700', fontSize: 20, color: '#666' },
-  name: { fontSize: 13, fontWeight: '600', marginBottom: 2, textAlign: 'center' },
-  score: { fontSize: 12, opacity: 0.55, marginBottom: 6 },
+  avatarInitial: { fontWeight: '700', fontSize: 20, color: 'rgba(255,255,255,0.6)' },
+  name: { fontSize: 13, fontWeight: '600', marginBottom: 2, textAlign: 'center', color: '#fff' },
+  score: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 },
   block: {
     width: '85%',
     borderTopLeftRadius: 8,
@@ -152,8 +147,6 @@ const podiumStyles = StyleSheet.create({
   medal: { fontSize: 22 },
 });
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
-
 export default function LeaderboardScreen() {
   const router = useRouter();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -161,12 +154,19 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [displayMultiplier, setDisplayMultiplier] = useState(0);
+  const [mode, setMode] = useState<'friends' | 'global'>('friends');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
-  async function loadLeaderboard() {
+  async function loadLeaderboard(currentMode: 'friends' | 'global' = modeRef.current) {
     try {
-      const { data: snipes } = await client.models.Snipe.list({
-        selectionSet: ['sniperId', 'targetId'],
-      });
+      const [{ data: snipes }, attributes, { data: allUsers }, { data: friendshipRecords }] =
+        await Promise.all([
+          client.models.Snipe.list({ selectionSet: ['sniperId', 'targetId'] }),
+          fetchUserAttributes(),
+          client.models.UserProfile.list(),
+          client.models.Friendship.list(),
+        ]);
 
       const snipesMade: Record<string, number> = {};
       const snipesReceived: Record<string, number> = {};
@@ -175,12 +175,9 @@ export default function LeaderboardScreen() {
         snipesReceived[snipe.targetId] = (snipesReceived[snipe.targetId] || 0) + 1;
       }
 
-      const attributes = await fetchUserAttributes();
-      const { data: allUsers } = await client.models.UserProfile.list();
       const currentUser = allUsers.find(u => u.email === attributes.email);
       const currentUserIdLocal = currentUser?.id ?? null;
 
-      const { data: friendshipRecords } = await client.models.Friendship.list();
       const friendIds = new Set(
         friendshipRecords
           .filter(f => f.userId === currentUserIdLocal)
@@ -188,25 +185,20 @@ export default function LeaderboardScreen() {
       );
       if (currentUserIdLocal) friendIds.add(currentUserIdLocal);
 
-      const profiles = allUsers.filter(u => friendIds.has(u.id));
+      const profiles = currentMode === 'global'
+        ? allUsers
+        : allUsers.filter(u => friendIds.has(u.id));
 
       const leaderboard: LeaderboardEntry[] = await Promise.all(
-        profiles.map(async (profile) => {
-          let profilePictureUrl: string | null = null;
-          if (profile.profilePicture) {
-            try {
-              const result = await getUrl({ path: profile.profilePicture });
-              profilePictureUrl = result.url.toString();
-            } catch {}
-          }
-          return {
-            id: profile.id,
-            name: profile.name,
-            profilePictureUrl,
-            snipeCount: snipesMade[profile.id] || 0,
-            timesSnipedCount: snipesReceived[profile.id] || 0,
-          };
-        })
+        profiles.map(async (profile) => ({
+          id: profile.id,
+          name: profile.name,
+          profilePictureUrl: profile.profilePicture
+            ? await getCachedUrl(profile.profilePicture)
+            : null,
+          snipeCount: snipesMade[profile.id] || 0,
+          timesSnipedCount: snipesReceived[profile.id] || 0,
+        }))
       );
 
       leaderboard.sort((a, b) => b.snipeCount - a.snipeCount);
@@ -220,7 +212,6 @@ export default function LeaderboardScreen() {
     }
   }
 
-  // Animate scores counting up whenever entries change
   useEffect(() => {
     if (entries.length === 0) return;
     setDisplayMultiplier(0);
@@ -228,14 +219,22 @@ export default function LeaderboardScreen() {
     const duration = 800;
     const interval = setInterval(() => {
       const progress = Math.min((Date.now() - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
       setDisplayMultiplier(eased);
       if (progress >= 1) clearInterval(interval);
     }, 16);
     return () => clearInterval(interval);
   }, [entries]);
 
-  useEffect(() => { loadLeaderboard(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadLeaderboard();
+    }, [])
+  );
+
+  useEffect(() => {
+    loadLeaderboard(mode);
+  }, [mode]);
 
   function onRefresh() {
     setRefreshing(true);
@@ -245,18 +244,19 @@ export default function LeaderboardScreen() {
   const myRank = currentUserId ? entries.findIndex(e => e.id === currentUserId) + 1 : 0;
   const myEntry = currentUserId ? entries.find(e => e.id === currentUserId) ?? null : null;
 
-  if (loading) {
+  if (loading && entries.length === 0) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText type="title" style={styles.header}>Leaderboard</ThemedText>
+      <View style={styles.container}>
+        <Text style={styles.header}>LEADERBOARD</Text>
         {[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}
-      </ThemedView>
+      </View>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.header}>Leaderboard</ThemedText>
+    <View style={styles.container}>
+      <Text style={styles.header}>LEADERBOARD</Text>
+      <ModeToggle mode={mode} onModeChange={setMode} />
 
       <FlatList
         data={entries.slice(3)}
@@ -291,53 +291,56 @@ export default function LeaderboardScreen() {
           entries.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>🏆</Text>
-              <ThemedText style={styles.emptyTitle}>No data yet</ThemedText>
-              <ThemedText style={styles.emptySubtitle}>Start sniping to appear here!</ThemedText>
+              <Text style={styles.emptyTitle}>No data yet</Text>
+              <Text style={styles.emptySubtitle}>Start sniping to appear here!</Text>
             </View>
           ) : null
         }
       />
 
-      {/* Sticky "your rank" banner */}
       {myEntry && (
         <View style={styles.myRankBanner}>
-          <ThemedText style={styles.myRankLabel}>Your rank</ThemedText>
-          <ThemedText style={styles.myRankNumber}>#{myRank}</ThemedText>
-          <ThemedText style={styles.myRankScore}>
+          <Text style={styles.myRankLabel}>Your rank</Text>
+          <Text style={styles.myRankNumber}>#{myRank}</Text>
+          <Text style={styles.myRankScore}>
             {Math.round(myEntry.snipeCount * displayMultiplier)} snipes
-          </ThemedText>
+          </Text>
         </View>
       )}
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: '#0B0B0F' },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 12,
+    paddingTop: 64,
+    paddingBottom: 14,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: 2,
+    color: '#fff',
   },
   emptyState: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     gap: 8,
   },
   emptyEmoji: { fontSize: 52, marginBottom: 8 },
-  emptyTitle: { fontSize: 18, fontWeight: '700' },
-  emptySubtitle: { fontSize: 14, opacity: 0.5, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  emptySubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center' },
   myRankBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(150,150,150,0.25)',
-    backgroundColor: 'rgba(150,150,150,0.06)',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#15151B',
   },
-  myRankLabel: { fontSize: 14, opacity: 0.6 },
-  myRankNumber: { fontWeight: '800', fontSize: 22 },
-  myRankScore: { fontSize: 14, opacity: 0.6 },
+  myRankLabel: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
+  myRankNumber: { fontWeight: '800', fontSize: 22, color: '#fff' },
+  myRankScore: { fontSize: 14, color: 'rgba(255,255,255,0.5)' },
 });

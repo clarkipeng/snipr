@@ -18,10 +18,15 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'chevron.left': 'chevron-left',
   'camera.fill': 'camera-alt',
   'person.2.fill': 'people',
+  'person.3.fill': 'group',
   'trophy.fill': 'emoji-events',
   'person.circle.fill': 'account-circle',
+  'gearshape.fill': 'settings',
+  'checkmark': 'check',
+  'eye.fill': 'visibility',
 } as IconMapping;
 
 /**

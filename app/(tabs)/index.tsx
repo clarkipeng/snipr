@@ -1,12 +1,11 @@
 import type { Schema } from '@/amplify/data/resource';
-import { ModeToggle } from '@/components/ModeToggle';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { SnipeCard } from '@/components/SnipeCard';
 import { getCachedUrl } from '@/utils/url-cache';
+import { useFocusEffect } from '@react-navigation/native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
@@ -26,38 +25,39 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [mode, setMode] = useState<'friends' | 'global'>('friends');
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
 
-  async function loadFeed(currentMode: 'friends' | 'global' = modeRef.current) {
+  async function loadFeed() {
     try {
       setError(null);
 
-      const [attributes, { data: allUsers }, { data: friendshipRecords }, { data: snipes }] =
-        await Promise.all([
-          fetchUserAttributes(),
-          client.models.UserProfile.list(),
-          client.models.Friendship.list(),
-          client.models.Snipe.list({
-            selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
-          }),
-        ]);
+      const attributes = await fetchUserAttributes();
 
+      const { data: allUsers } = await client.models.UserProfile.list({ limit: 1000 });
       const currentUser = allUsers.find(u => u.email === attributes.email);
       const currentUserId = currentUser?.id ?? null;
 
-      const friendIds = new Set(
-        friendshipRecords
-          .filter(f => f.userId === currentUserId)
-          .map(f => f.friendId)
-      );
+      const { data: memberships } = await client.models.GroupMember.list({ filter: { userId: { eq: currentUserId ?? undefined } }, limit: 1000 });
+      const groupIds = new Set(memberships.map(m => m.groupId));
+
+      // Fetch all friend IDs across all friendships
+      const { data: friendships } = await client.models.Friendship.list({ limit: 1000 });
+      const friendIds = new Set<string>();
+      friendships.forEach(f => {
+        if (f.userId === currentUserId) friendIds.add(f.friendId);
+        if (f.friendId === currentUserId) friendIds.add(f.userId);
+      });
+
+      const { data: snipes } = await client.models.Snipe.list({
+        selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
+        limit: 1000
+      });
 
       const userMap = new Map(allUsers.map(u => [u.id, u]));
 
-      const filtered = currentMode === 'global'
-        ? snipes
-        : snipes.filter(s => friendIds.has(s.sniperId) || s.sniperId === currentUserId);
+      // Rule: You must be friends with BOTH the sniper AND the target (or be one of them)
+      const isAllowed = (id: string | null) => id === currentUserId || (id && friendIds.has(id));
+      const filtered = snipes.filter(s => isAllowed(s.sniperId) && isAllowed(s.targetId));
+
       const sorted = [...filtered]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 30);
@@ -100,10 +100,6 @@ export default function HomeScreen() {
     }, [])
   );
 
-  useEffect(() => {
-    loadFeed(mode);
-  }, [mode]);
-
   function onRefresh() {
     setRefreshing(true);
     loadFeed();
@@ -125,7 +121,6 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.header}>MISSION FEED</Text>
-      <ModeToggle mode={mode} onModeChange={setMode} />
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}
@@ -153,7 +148,6 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🎯</Text>
             <Text style={styles.emptyTitle}>Nothing here yet</Text>
             <Text style={styles.emptySubtitle}>Add friends and start sniping!</Text>
           </View>

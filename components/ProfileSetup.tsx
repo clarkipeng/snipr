@@ -1,4 +1,5 @@
 import type { Schema } from "@/amplify/data/resource";
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
@@ -87,7 +88,7 @@ export default function ProfileSetup({ onComplete }: ProfileSetupScreenProps) {
                         <Image source={{ uri: image }} style={styles.avatarImage} />
                     ) : (
                         <View style={styles.avatarPlaceholder}>
-                            <Text style={styles.cameraEmoji}>📷</Text>
+                            <IconSymbol name="camera.fill" size={32} color={isDark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)"} />
                         </View>
                     )}
                     <View style={styles.avatarBadge}>

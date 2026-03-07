@@ -1,11 +1,13 @@
 import type { Schema } from '@/amplify/data/resource';
+import { FriendRow } from '@/components/FriendRow';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { uploadData } from 'aws-amplify/storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Button,
@@ -18,11 +20,9 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import Animated, {
+import {
     useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+    useSharedValue
 } from 'react-native-reanimated';
 
 const client = generateClient<Schema>();
@@ -49,8 +49,7 @@ function Crosshair() {
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function SnipingScreen() {
-    const colorScheme = useColorScheme();
-    const isDark = colorScheme === 'dark';
+    const isDark = useColorScheme() === 'dark';
 
     const [permission, requestPermission] = useCameraPermissions();
     const cameraRef = useRef<CameraView>(null);
@@ -58,27 +57,30 @@ export default function SnipingScreen() {
     const [isSniping, setIsSniping] = useState(false);
 
     const [currentUserProfile, setCurrentUserProfile] = useState<{ id: string; name: string } | null>(null);
-    const [friends, setFriends] = useState<{ id: string; name: string }[]>([]);
-    const [selectedFriend, setSelectedFriend] = useState<{ id: string; name: string } | null>(null);
+    const [friends, setFriends] = useState<{ id: string, name: string, profilePicture?: string | null }[]>([]);
+    const [selectedFriend, setSelectedFriend] = useState<{ id: string, name: string, profilePicture?: string | null } | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loadingFriends, setLoadingFriends] = useState(true);
-    const [pickerVisible, setPickerVisible] = useState(false);
+    const [isPickerVisible, setIsPickerVisible] = useState(false);
     const [caption, setCaption] = useState('');
 
-    // Spring animation for bottom sheet
+    // Spring animation for bottom sheet (no longer used for modal, but kept for potential future use)
     const sheetY = useSharedValue(600);
     const sheetAnimStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: sheetY.value }],
     }));
 
     function openPicker() {
-        setPickerVisible(true);
-        sheetY.value = 600;
-        sheetY.value = withSpring(0, { damping: 20, stiffness: 180 });
+        setIsPickerVisible(true);
+        // sheetY.value = 600; // No longer needed with animationType="slide"
+        // sheetY.value = withSpring(0, { damping: 20, stiffness: 180 });
     }
 
     function closePicker() {
-        sheetY.value = withTiming(600, { duration: 220 });
-        setTimeout(() => setPickerVisible(false), 220);
+        // sheetY.value = withTiming(600, { duration: 220 }); // No longer needed
+        // setTimeout(() => setIsPickerVisible(false), 220);
+        setIsPickerVisible(false);
+        setSearchQuery('');
     }
 
     useEffect(() => {
@@ -110,7 +112,7 @@ export default function SnipingScreen() {
                     myFriendships
                         .map(f => userMap.get(f.friendId))
                         .filter(Boolean)
-                        .map(p => ({ id: p!.id, name: p!.name }))
+                        .map(p => ({ id: p!.id, name: p!.name, profilePicture: p!.profilePicture }))
                 );
             } catch (err) {
                 console.error('Error loading friends:', err);
@@ -143,15 +145,19 @@ export default function SnipingScreen() {
 
             await uploadData({ path: filename, data: blob }).result;
 
-            await client.models.Snipe.create({
-                sniperId: currentUserProfile.id,
+            const { data: newSnipe, errors } = await client.mutations.submitSnipe({
                 targetId: selectedFriend.id,
                 imageKey: filename,
                 caption: caption.trim() || undefined,
             });
 
+            if (errors) {
+                console.error("Snipe creation error!", errors);
+                throw new Error("Failed to create snipe");
+            }
+
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setStatus('Snipe sent! 🎯');
+            setStatus('Snipe sent!');
             setCaption('');
             setSelectedFriend(null);
             setTimeout(() => { setStatus(''); setIsSniping(false); }, 3000);
@@ -192,7 +198,7 @@ export default function SnipingScreen() {
 
                         {selectedFriend && !status ? (
                             <View style={styles.targetBadge}>
-                                <Text style={styles.targetLockIcon}>🔒</Text>
+                                <IconSymbol name="eye.fill" size={14} color="#fff" />
                                 <View style={styles.targetBadgeAvatar}>
                                     <Text style={styles.targetBadgeInitial}>
                                         {selectedFriend.name.charAt(0).toUpperCase()}
@@ -248,53 +254,53 @@ export default function SnipingScreen() {
                 </View>
             </CameraView>
 
-            {/* Friend picker modal with spring animation */}
-            <Modal
-                visible={pickerVisible}
-                transparent
-                animationType="none"
-                onRequestClose={closePicker}
-            >
-                <Pressable style={styles.modalOverlay} onPress={closePicker}>
-                    <Animated.View style={[
-                        styles.modalSheet,
-                        isDark && styles.modalSheetDark,
-                        sheetAnimStyle,
-                    ]}>
-                        <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>
-                            Select Target
-                        </Text>
-                        {friends.length === 0 ? (
-                            <Text style={styles.emptyText}>No friends yet. Add some friends first!</Text>
-                        ) : (
+            {/* Friend Picker Modal */}
+            <Modal visible={isPickerVisible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalSheet, isDark && styles.modalSheetDark, { height: '80%' }]}>
+                        <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>Select Target</Text>
+
+                        <TextInput
+                            style={[
+                                styles.captionInput,
+                                { marginBottom: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: isDark ? '#fff' : '#000' }
+                            ]}
+                            placeholder="Search friends..."
+                            placeholderTextColor={isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.4)"}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+
+                        {loadingFriends ? <ActivityIndicator size="small" /> : (
                             <FlatList
-                                data={friends}
+                                data={friends.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))}
                                 keyExtractor={item => item.id}
                                 renderItem={({ item }) => (
-                                    <Pressable
-                                        style={[styles.friendRow, isDark && styles.friendRowDark]}
-                                        onPress={() => {
-                                            setSelectedFriend(item);
-                                            closePicker();
-                                        }}
-                                    >
-                                        <View style={styles.friendRowAvatar}>
-                                            <Text style={styles.friendRowInitial}>
-                                                {item.name.charAt(0).toUpperCase()}
-                                            </Text>
-                                        </View>
-                                        <Text style={[styles.friendName, isDark && styles.friendNameDark]}>
-                                            {item.name}
-                                        </Text>
-                                    </Pressable>
+                                    <View style={{ marginBottom: 8 }}>
+                                        <FriendRow
+                                            user={item}
+                                            onPress={() => {
+                                                setSelectedFriend(item);
+                                                setIsPickerVisible(false);
+                                                setSearchQuery('');
+                                            }}
+                                        />
+                                    </View>
                                 )}
+                                ListEmptyComponent={<Text style={styles.emptyText}>No friends found.</Text>}
                             />
                         )}
-                        <Pressable style={[styles.cancelButton, isDark && styles.cancelButtonDark]} onPress={closePicker}>
+                        <TouchableOpacity
+                            style={[styles.cancelButton, isDark && styles.cancelButtonDark]}
+                            onPress={() => {
+                                setIsPickerVisible(false);
+                                setSearchQuery('');
+                            }}
+                        >
                             <Text style={[styles.cancelText, isDark && styles.cancelTextDark]}>Cancel</Text>
-                        </Pressable>
-                    </Animated.View>
-                </Pressable>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </Modal>
         </View>
     );
@@ -356,7 +362,7 @@ const styles = StyleSheet.create({
         gap: 8,
         maxWidth: '70%',
     },
-    targetLockIcon: { fontSize: 14 },
+    targetLockIcon: { marginRight: 4 },
     targetBadgeAvatar: {
         width: 26,
         height: 26,

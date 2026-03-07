@@ -1,6 +1,6 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 type SnipeCardProps = {
   sniperName: string;
@@ -70,11 +70,11 @@ export function SnipeCard({
       >
         <View style={styles.header}>
           <SniperAvatar url={sniperProfilePictureUrl} name={sniperName} />
-          <View style={styles.names}>
+          <Text style={styles.names} numberOfLines={2}>
             <Text style={styles.sniperName}>{sniperName}</Text>
-            <Text style={styles.crosshair}> 🎯 </Text>
+            <Text style={styles.actionText}> sniped </Text>
             <Text style={styles.targetName}>{targetName}</Text>
-          </View>
+          </Text>
           <Text style={styles.time}>{formatTime(createdAt)}</Text>
         </View>
 
@@ -138,10 +138,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   names: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-    flexWrap: 'wrap',
+    marginRight: 8,
   },
   sniperName: {
     fontWeight: '800',
@@ -149,8 +147,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.3,
   },
-  crosshair: {
-    fontSize: 13,
+  actionText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
   },
   targetName: {
     fontWeight: '800',

@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { createSnipeFunction } from '../functions/create-snipe/resource';
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -13,10 +14,13 @@ const schema = a.schema({
       email: a.string().required(),
       profilePicture: a.string(),
       friends: a.hasMany('Friendship', 'userId'),
+      friendOf: a.hasMany('Friendship', 'friendId'),
       sentRequests: a.hasMany('FriendRequest', 'senderId'),
       receivedRequests: a.hasMany('FriendRequest', 'receiverId'),
       snipesMade: a.hasMany('Snipe', 'sniperId'),
       snipesReceived: a.hasMany('Snipe', 'targetId'),
+      groupMemberships: a.hasMany('GroupMember', 'userId'),
+      messages: a.hasMany('Message', 'senderId'),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -28,6 +32,7 @@ const schema = a.schema({
       userId: a.id().required(),
       friendId: a.string().required(),
       user: a.belongsTo('UserProfile', 'userId'),
+      friend: a.belongsTo('UserProfile', 'friendId'),
     })
     .authorization((allow) => [
       allow.authenticated(),
@@ -52,11 +57,54 @@ const schema = a.schema({
       caption: a.string(),
       sniper: a.belongsTo('UserProfile', 'sniperId'),
       target: a.belongsTo('UserProfile', 'targetId'),
+      messages: a.hasMany('Message', 'snipeId'),
     })
     .authorization((allow) => [
       allow.owner(),
       allow.authenticated().to(['read']),
     ]),
+
+  Group: a
+    .model({
+      name: a.string().required(),
+      description: a.string(),
+      createdBy: a.id().required(),
+      members: a.hasMany('GroupMember', 'groupId'),
+      messages: a.hasMany('Message', 'groupId'),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
+  GroupMember: a
+    .model({
+      groupId: a.id().required(),
+      userId: a.id().required(),
+      group: a.belongsTo('Group', 'groupId'),
+      user: a.belongsTo('UserProfile', 'userId'),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
+  Message: a
+    .model({
+      groupId: a.id().required(),
+      senderId: a.id().required(),
+      content: a.string(),
+      snipeId: a.id(),
+      isSystemMessage: a.boolean(),
+      group: a.belongsTo('Group', 'groupId'),
+      sender: a.belongsTo('UserProfile', 'senderId'),
+      snipe: a.belongsTo('Snipe', 'snipeId'),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
+  submitSnipe: a.mutation()
+    .arguments({
+      targetId: a.id().required(),
+      imageKey: a.string().required(),
+      caption: a.string(),
+    })
+    .returns(a.ref('Snipe'))
+    .handler(a.handler.function(createSnipeFunction))
+    .authorization((allow) => [allow.authenticated()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

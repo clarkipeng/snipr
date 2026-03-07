@@ -23,6 +23,10 @@ type ProfileData = {
   snipesMade: number;
   snipesReceived: number;
   recentSnipeUrls: string[];
+  topSnipers: {
+    user: Schema['UserProfile']['type'];
+    count: number;
+  }[];
 };
 
 type ProfileViewProps = {
@@ -69,9 +73,9 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           isViewingSelf || !meId
             ? Promise.resolve(null)
             : Promise.all([
-                client.models.Friendship.list({ filter: { userId: { eq: meId } } }),
-                client.models.FriendRequest.list({ filter: { senderId: { eq: meId } } }),
-              ]),
+              client.models.Friendship.list({ filter: { userId: { eq: meId } } }),
+              client.models.FriendRequest.list({ filter: { senderId: { eq: meId } } }),
+            ]),
         ]);
 
         if (cancelled) return;
@@ -89,6 +93,20 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           ? await getCachedUrl(targetProfile.profilePicture)
           : null;
 
+        const receivedFromCounts = new Map<string, number>();
+        received.forEach(s => {
+          receivedFromCounts.set(s.sniperId, (receivedFromCounts.get(s.sniperId) || 0) + 1);
+        });
+
+        const topSnipers = Array.from(receivedFromCounts.entries())
+          .map(([sniperId, count]) => ({
+            user: userMap.get(sniperId)!,
+            count,
+          }))
+          .filter(item => item.user)
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
         setProfile({
           name: targetProfile.name,
           email: targetProfile.email,
@@ -96,6 +114,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           snipesMade: made.length,
           snipesReceived: received.length,
           recentSnipeUrls: [],
+          topSnipers,
         });
 
         const sorted = [...made]
@@ -170,7 +189,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         {friendStatus === 'friends' && (
           <View style={[styles.friendButton, styles.friendButtonFriends]}>
-            <Text style={styles.friendButtonTextFriends}>Friends ✓</Text>
+            <Text style={styles.friendButtonTextFriends}>Friends</Text>
           </View>
         )}
         {friendStatus === 'not_friends' && (
@@ -205,15 +224,14 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           <View style={styles.statDivider} />
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>
-              {profile.snipesMade - profile.snipesReceived}
+              {(profile.snipesMade / Math.max(1, profile.snipesReceived)).toFixed(2)}
             </Text>
-            <Text style={styles.statLabel}>Net</Text>
+            <Text style={styles.statLabel}>Ratio</Text>
           </View>
         </View>
 
         {profile.snipesMade === 0 && profile.snipesReceived === 0 && (
           <View style={styles.emptySnipes}>
-            <Text style={styles.emptySnipesEmoji}>🥷</Text>
             <Text style={styles.emptySnipesText}>
               No snipes yet — still lurking in the shadows...
             </Text>
@@ -222,10 +240,29 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         {profile.recentSnipeUrls.length > 0 && (
           <View style={styles.gridSection}>
-            <Text style={styles.gridTitle}>Snipes</Text>
+            <Text style={styles.gridTitle}>Recent Snipes</Text>
             <View style={styles.grid}>
               {profile.recentSnipeUrls.map((url, i) => (
                 <Image key={i} source={{ uri: url }} style={styles.gridImage} />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {profile.topSnipers.length > 0 && (
+          <View style={[styles.gridSection, { marginTop: 8 }]}>
+            <Text style={styles.gridTitle}>Personal Leaderboard (Sniped By)</Text>
+            <View style={{ backgroundColor: '#15151B', borderRadius: 16, overflow: 'hidden' }}>
+              {profile.topSnipers.map((item, index) => (
+                <View key={item.user.id} style={styles.topSniperRow}>
+                  <Text style={styles.topSniperRank}>#{index + 1}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.topSniperName} numberOfLines={1}>{item.user.name}</Text>
+                  </View>
+                  <View style={styles.topSniperScoreBadge}>
+                    <Text style={styles.topSniperScore}>{item.count}</Text>
+                  </View>
+                </View>
               ))}
             </View>
           </View>
@@ -377,5 +414,34 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '600',
     fontSize: 16,
+  },
+  topSniperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  topSniperRank: {
+    color: '#FF3B30',
+    fontWeight: '800',
+    fontSize: 16,
+    width: 32,
+  },
+  topSniperName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  topSniperScoreBadge: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  topSniperScore: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

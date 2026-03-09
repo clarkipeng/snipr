@@ -20,6 +20,7 @@ type FeedItem = {
   isSystemMessage: boolean;
   createdAt: string;
   snipeData?: {
+    snipeId: string;
     sniperName: string;
     targetName: string;
     sniperProfilePictureUrl: string | null;
@@ -45,6 +46,7 @@ export default function GroupsScreen() {
   const [groupMembers, setGroupMembers] = useState<(Schema['GroupMember']['type'] & { user?: any })[]>([]);
   const [groupFeed, setGroupFeed] = useState<FeedItem[]>([]);
   const [groupLeaderboard, setGroupLeaderboard] = useState<GroupLeaderboardItem[]>([]);
+  const [groupUserMap, setGroupUserMap] = useState<Map<string, { id: string; name: string; email?: string }>>(new Map());
 
   // UI states
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'feed' | 'manage' | 'leaderboard'>('list');
@@ -192,6 +194,7 @@ export default function GroupsScreen() {
       ]);
 
       const userMap = new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, profilePicture: u.profilePicture }]));
+      setGroupUserMap(new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, email: u.email }])));
 
       const enrichedMembers = memberships.map(m => ({
         id: m.id,
@@ -224,6 +227,7 @@ export default function GroupsScreen() {
               const imageUrl = await getCachedUrl(snipe.imageKey);
 
               snipeData = {
+                snipeId: snipe.id,
                 sniperName: sniper?.name ?? 'Unknown',
                 targetName: target?.name ?? 'Unknown',
                 sniperProfilePictureUrl,
@@ -528,12 +532,15 @@ export default function GroupsScreen() {
                   if (item.snipeData) {
                     return (
                       <SnipeCard
+                        snipeId={item.snipeData.snipeId}
                         sniperName={item.snipeData.sniperName}
                         targetName={item.snipeData.targetName}
                         sniperProfilePictureUrl={item.snipeData.sniperProfilePictureUrl}
                         imageUrl={item.snipeData.imageUrl}
                         caption={item.snipeData.caption}
                         createdAt={item.createdAt}
+                        currentUserId={currentUserId}
+                        userMap={groupUserMap}
                       />
                     );
                   }

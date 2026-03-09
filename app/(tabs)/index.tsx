@@ -10,6 +10,8 @@ import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
 
+type UserEntry = { id: string; name: string; email?: string };
+
 type FeedItem = {
   id: string;
   sniperName: string;
@@ -25,6 +27,8 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userMap, setUserMap] = useState<Map<string, UserEntry>>(new Map());
 
   async function loadFeed() {
     try {
@@ -52,7 +56,9 @@ export default function HomeScreen() {
         limit: 1000
       });
 
-      const userMap = new Map(allUsers.map(u => [u.id, u]));
+      const uMap = new Map(allUsers.map(u => [u.id, u]));
+      setUserMap(new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, email: u.email }])));
+      setCurrentUserId(currentUser?.id ?? null);
 
       // Rule: You must be friends with BOTH the sniper AND the target (or be one of them)
       const isAllowed = (id: string | null) => id === currentUserId || (id && friendIds.has(id));
@@ -64,7 +70,7 @@ export default function HomeScreen() {
 
       const items: FeedItem[] = await Promise.all(
         sorted.map(async (snipe) => {
-          const user = userMap.get(snipe.sniperId);
+          const user = uMap.get(snipe.sniperId);
           const profilePicPath = user?.profilePicture;
 
           const [sniperProfilePictureUrl, imageUrl] = await Promise.all([
@@ -74,8 +80,8 @@ export default function HomeScreen() {
 
           return {
             id: snipe.id,
-            sniperName: userMap.get(snipe.sniperId)?.name ?? 'Unknown',
-            targetName: userMap.get(snipe.targetId)?.name ?? 'Unknown',
+            sniperName: uMap.get(snipe.sniperId)?.name ?? 'Unknown',
+            targetName: uMap.get(snipe.targetId)?.name ?? 'Unknown',
             sniperProfilePictureUrl,
             imageUrl,
             caption: snipe.caption ?? null,
@@ -129,12 +135,15 @@ export default function HomeScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <SnipeCard
+            snipeId={item.id}
             sniperName={item.sniperName}
             targetName={item.targetName}
             sniperProfilePictureUrl={item.sniperProfilePictureUrl}
             imageUrl={item.imageUrl}
             caption={item.caption}
             createdAt={item.createdAt}
+            currentUserId={currentUserId}
+            userMap={userMap}
           />
         )}
         contentContainerStyle={styles.listContent}

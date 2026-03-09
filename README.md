@@ -1,5 +1,41 @@
 # Snipr
 
+A gamified social photography app where users "snipe" friends by taking photos of them. Snipes are shared in mutual friend groups, tracked on leaderboards, and used to build domination streaks.
+
+## Features
+
+- **Authentication** — Email/password sign-up and login via AWS Cognito, with email confirmation and password reset
+- **Sniping (Core)** — Take a photo with the in-app camera, select a target friend, add an optional caption, and send a snipe
+- **Mission Feed** — View all snipes involving you and your friends, sorted chronologically
+- **Friends** — Send, accept, and reject friend requests; search for users by name or email; unfriend
+- **Groups & Group Chat** — Create groups with friends, send text messages, and have snipes auto-broadcast to any groups shared between the sniper and target
+- **Group Leaderboard** — Ranked snipe scores per group, with "domination" tracking (3+ consecutive snipes against the same person)
+- **User Profiles** — Profile pictures, snipe counts, top snipers, and recent snipe previews
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Mobile Framework | React Native + Expo |
+| Language | TypeScript |
+| Navigation | Expo Router (file-based) |
+| Authentication | AWS Cognito |
+| API | AWS AppSync (GraphQL) |
+| Database | AWS DynamoDB |
+| Server-Side Logic | AWS Lambda (Node.js) |
+| File Storage | AWS S3 |
+| Infrastructure | AWS Amplify Gen 2 + CDK |
+
+## Architecture
+
+The backend uses AWS Amplify Gen 2. Amplify provisions the infrastructure (DynamoDB tables, AppSync API, Cognito user pool, S3 bucket) and auto-generates basic CRUD resolvers. On top of that, three custom Lambda functions implement the app's core business logic:
+
+- **`createSnipe`** — Resolves the sniper's profile from their Cognito identity, creates a Snipe record, queries group memberships for both the sniper and target, finds shared groups, and creates a Message record in each shared group — all in a single server-side operation.
+- **`acceptFriendRequest`** — Uses a DynamoDB `TransactWrite` to atomically create two bidirectional Friendship records and delete the FriendRequest in one ACID-compliant operation.
+- **`searchUsers`** — Scans the UserProfile table and filters results by name or email substring match (case-insensitive).
+
+The leaderboard's domination scoring (ranking users and detecting 3+ consecutive snipes against the same target) is computed client-side from snipe history fetched from the server.
+
 ## Prerequisites
 
 - Node.js installed
@@ -62,21 +98,20 @@
    - Press `i` for iOS simulator
    - Press `a` for Android emulator
    - Press `w` for web
-   - Scan QR code for Expo Go on your phone
+   - Scan QR code with the Expo Go app on your phone
 
-## For Most Developers (no AWS setup needed)
+## For Graders / Teammates (no AWS setup needed)
 
-If someone on the team already has a sandbox running, just:
+If a sandbox is already running, you only need:
 
-1. Get the `amplify_outputs.json` file from that teammate
-2. Drop it in the project root
-3. `npm install`
-4. `npx expo start`
+1. Get the `amplify_outputs.json` file from a team member and place it in the project root
+2. Run `npm install`
+3. Run `npx expo start`
 
-That's it — you'll connect to the shared backend.
+You will connect to the shared backend automatically.
 
 ## Notes
 
-- `amplify_outputs.json` is gitignored — get it from a teammate or generate your own.
+- `amplify_outputs.json` is gitignored — get it from a teammate or generate your own via the sandbox.
 - The sandbox owner must keep `npm run amplify:sandbox` running for schema changes to auto-deploy.
 - Do **not** commit `.env` or `~/.aws/credentials`.

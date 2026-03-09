@@ -10,6 +10,8 @@ import { generateClient } from "aws-amplify/data";
 
 const client = generateClient<Schema>();
 
+type SearchUserItem = { id: string; name: string; email: string; profilePicture: string | null };
+
 const UserAvatar = ({ path }: { path: string | null }) => {
     const [uri, setUri] = useState<string | null>(null);
 
@@ -47,6 +49,9 @@ export default function FriendsScreen() {
     const [userId, setUserId] = useState<string | null>(null);
 
     const [allUsersMap, setAllUsersMap] = useState<Map<string, Schema['UserProfile']['type']>>(new Map());
+
+    const [searchResults, setSearchResults] = useState<SearchUserItem[]>([]);
+    const [searchLoading, setSearchLoading] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -108,7 +113,36 @@ export default function FriendsScreen() {
         }, [])
     );
 
-    const sendRequest = async (userToAdd: Schema['UserProfile']['type']) => {
+    useEffect(() => {
+        const q = searchQuery.trim();
+        if (!q) {
+            setSearchResults([]);
+            return;
+        }
+        let cancelled = false;
+        setSearchLoading(true);
+        client.queries
+            .searchUsers({ query: q })
+            .then(({ data }) => {
+                if (!cancelled && data?.users) {
+                    setSearchResults(data.users);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    console.error('Search failed:', err);
+                    setSearchResults([]);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setSearchLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [searchQuery]);
+
+    const sendRequest = async (userToAdd: Schema['UserProfile']['type'] | SearchUserItem) => {
         if (!userId) return;
         try {
             await client.models.FriendRequest.create({
@@ -124,16 +158,7 @@ export default function FriendsScreen() {
     const acceptRequest = async (request: Schema['FriendRequest']['type']) => {
         if (!userId) return;
         try {
-            await client.models.Friendship.create({
-                userId: userId,
-                friendId: request.senderId
-            });
-            await client.models.Friendship.create({
-                userId: request.senderId,
-                friendId: userId
-            });
-
-            await client.models.FriendRequest.delete({ id: request.id });
+            await client.mutations.acceptFriendRequest({ requestId: request.id });
 
             setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
             setPendingCount(Math.max(0, incomingRequests.length - 1));
@@ -176,14 +201,15 @@ export default function FriendsScreen() {
         }
     };
 
-    const isSearching = activeTab === 'search' && searchQuery.length > 0;
-
+    const isSearching = activeTab === 'search' && searchQuery.trim().length > 0;
+    const friendIds = new Set(friends.map((f) => f.id));
     const displayedFriendsData = friends;
-    const displayedSearchData = isSearching
-        ? nonFriends.filter(u => u.email.toLowerCase().includes(searchQuery.toLowerCase()) || u.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : [];
+    const displayedSearchData =
+        activeTab === 'search'
+            ? searchResults.filter((u) => u.id !== userId && !friendIds.has(u.id))
+            : [];
 
-    const renderFriendOrUserItem = ({ item }: { item: Schema['UserProfile']['type'] }) => {
+    const renderFriendOrUserItem = ({ item }: { item: Schema['UserProfile']['type'] | SearchUserItem }) => {
         const hasSentRequest = sentRequestIds.has(item.id);
 
         return (
@@ -287,7 +313,15 @@ export default function FriendsScreen() {
                     keyExtractor={(item) => item.id}
                     renderItem={renderFriendOrUserItem}
                     style={styles.list}
-                    ListEmptyComponent={<Text style={styles.emptyText}>{searchQuery.length > 0 ? 'No users found.' : 'Type a name or email to search.'}</Text>}
+                    ListEmptyComponent={
+                        <Text style={styles.emptyText}>
+                            {searchLoading
+                                ? 'Searching...'
+                                : searchQuery.trim().length > 0
+                                  ? 'No users found.'
+                                  : 'Type a name or email to search.'}
+                        </Text>
+                    }
                 />
             )}
 

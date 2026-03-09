@@ -1,5 +1,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { acceptFriendRequestFunction } from '../functions/accept-friend-request/resource';
 import { createSnipeFunction } from '../functions/create-snipe/resource';
+import { searchUsersFunction } from '../functions/search-users/resource';
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -96,6 +98,17 @@ const schema = a.schema({
     })
     .authorization((allow) => [allow.authenticated()]),
 
+  SearchUserResult: a.customType({
+    id: a.id().required(),
+    name: a.string().required(),
+    email: a.string().required(),
+    profilePicture: a.string(),
+  }),
+
+  SearchUsersResponse: a.customType({
+    users: a.ref('SearchUserResult').array(),
+  }),
+
   submitSnipe: a.mutation()
     .arguments({
       targetId: a.id().required(),
@@ -104,6 +117,19 @@ const schema = a.schema({
     })
     .returns(a.ref('Snipe'))
     .handler(a.handler.function(createSnipeFunction))
+    .authorization((allow) => [allow.authenticated()]),
+
+  acceptFriendRequest: a.mutation()
+    .arguments({ requestId: a.id().required() })
+    .returns(a.boolean())
+    .handler(a.handler.function(acceptFriendRequestFunction))
+    .authorization((allow) => [allow.authenticated()]),
+
+  searchUsers: a
+    .query()
+    .arguments({ query: a.string().required() })
+    .returns(a.ref('SearchUsersResponse'))
+    .handler(a.handler.function(searchUsersFunction))
     .authorization((allow) => [allow.authenticated()]),
 });
 

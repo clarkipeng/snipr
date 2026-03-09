@@ -19,10 +19,27 @@ import {
   confirmSignUp,
   resetPassword,
   confirmResetPassword,
+  resendSignUpCode,
   type SignInOutput,
 } from 'aws-amplify/auth';
 
 type AuthMode = 'login' | 'signup' | 'confirm' | 'forgotPassword' | 'resetConfirm';
+
+function getAuthErrorMessage(err: any): string {
+  if (typeof err === 'string') return err;
+  const message = err?.message || err?.code || '';
+  if (message.includes('UserAlreadyAuthenticatedException')) return 'Already signed in. Restarting...';
+  if (message.includes('UserNotConfirmedException')) return 'Please verify your email first.';
+  if (message.includes('NotAuthorizedException')) return 'Incorrect email or password.';
+  if (message.includes('UserNotFoundException')) return 'No account found with that email.';
+  if (message.includes('UsernameExistsException')) return 'An account with this email already exists.';
+  if (message.includes('CodeMismatchException')) return 'Invalid verification code.';
+  if (message.includes('ExpiredCodeException')) return 'Code has expired. Please resend.';
+  if (message.includes('LimitExceededException')) return 'Too many attempts. Please wait and try again.';
+  if (message.includes('InvalidPasswordException')) return 'Password must be 8+ characters with uppercase, lowercase, number, and symbol.';
+  if (message.includes('InvalidParameterException')) return 'Please check your input and try again.';
+  return message || 'Something went wrong. Please try again.';
+}
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<AuthMode>('login');
@@ -32,6 +49,7 @@ export default function AuthScreen() {
   const [confirmCode, setConfirmCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -61,86 +79,180 @@ export default function AuthScreen() {
     }).start();
   };
 
+  const cleanEmail = () => email.trim().toLowerCase();
+
   const handleLogin = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
     setError('');
+    setInfo('');
     setLoading(true);
     try {
-      await signOut();
-      const result: SignInOutput = await signIn({ username: email, password });
+      // Diagnostic: check crypto + network
+      const hasCrypto = typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function';
+      console.log('[AUTH DEBUG] crypto.getRandomValues available:', hasCrypto);
+      try {
+        const res = await fetch('https://cognito-idp.us-west-2.amazonaws.com/', { method: 'POST', headers: { 'Content-Type': 'application/x-amz-json-1.1' } });
+        console.log('[AUTH DEBUG] Cognito endpoint reachable, status:', res.status);
+      } catch (netErr) {
+        console.error('[AUTH DEBUG] Cognito endpoint NOT reachable:', netErr);
+        setError('Cannot reach authentication server. Check your internet connection.');
+        setLoading(false);
+        return;
+      }
+
+      try { await signOut({ global: true }); } catch (_) {}
+      const result: SignInOutput = await signIn({ username: trimmedEmail, password });
       if (result.nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
         setMode('confirm');
+        setInfo('Please check your email for the verification code.');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message ?? 'Login failed');
+      console.error('Login error name:', err?.name);
+      console.error('Login error message:', err?.message);
+      console.error('Login error stack:', err?.stack);
+      console.error('Login error underlying:', JSON.stringify(err?.underlyingError));
+      const msg = getAuthErrorMessage(err);
+      if (msg.includes('verify your email')) {
+        setMode('confirm');
+        setInfo('Please check your email for the verification code.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleSignUp = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail) {
+      setError('Please enter your email.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Passwords do not match.');
       return;
     }
     setError('');
+    setInfo('');
     setLoading(true);
     try {
       const { nextStep } = await signUp({
-        username: email,
+        username: trimmedEmail,
         password,
-        options: { userAttributes: { email } },
+        options: { userAttributes: { email: trimmedEmail } },
       });
       if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         setMode('confirm');
+        setInfo('Verification code sent to your email.');
       }
     } catch (err: any) {
-      setError(err.message ?? 'Sign up failed');
+      console.error('Signup error:', JSON.stringify(err, null, 2));
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   const handleConfirm = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail) {
+      setError('Email is missing. Please go back and enter it.');
+      return;
+    }
+    if (!confirmCode.trim()) {
+      setError('Please enter the verification code.');
+      return;
+    }
     setError('');
+    setInfo('');
     setLoading(true);
     try {
-      await confirmSignUp({ username: email, confirmationCode: confirmCode });
-      await signIn({ username: email, password });
+      await confirmSignUp({ username: trimmedEmail, confirmationCode: confirmCode.trim() });
+      try { await signOut({ global: true }); } catch (_) {}
+      await signIn({ username: trimmedEmail, password });
     } catch (err: any) {
-      setError(err.message ?? 'Confirmation failed');
+      console.error('Confirm error:', JSON.stringify(err, null, 2));
+      setError(getAuthErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail) {
+      setError('Please enter your email first.');
+      return;
+    }
+    setError('');
+    setInfo('');
+    setLoading(true);
+    try {
+      await resendSignUpCode({ username: trimmedEmail });
+      setInfo('New verification code sent to your email.');
+    } catch (err: any) {
+      console.error('Resend error:', JSON.stringify(err, null, 2));
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   const handleForgotPassword = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail) {
+      setError('Please enter your email.');
+      return;
+    }
     setError('');
+    setInfo('');
     setLoading(true);
     try {
-      await resetPassword({ username: email });
+      await resetPassword({ username: trimmedEmail });
       setMode('resetConfirm');
+      setInfo('Reset code sent to your email.');
     } catch (err: any) {
-      setError(err.message ?? 'Could not send reset code');
+      console.error('Forgot password error:', JSON.stringify(err, null, 2));
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetConfirm = async () => {
+    const trimmedEmail = cleanEmail();
+    if (!trimmedEmail) {
+      setError('Email is missing. Please go back and enter it.');
+      return;
+    }
+    if (!confirmCode.trim() || !newPassword) {
+      setError('Please enter the code and your new password.');
+      return;
+    }
     setError('');
+    setInfo('');
     setLoading(true);
     try {
       await confirmResetPassword({
-        username: email,
-        confirmationCode: confirmCode,
+        username: trimmedEmail,
+        confirmationCode: confirmCode.trim(),
         newPassword,
       });
       setPassword(newPassword);
       setMode('login');
-      setError('Password reset! You can log in now.');
+      setInfo('Password reset successful! You can log in now.');
     } catch (err: any) {
-      setError(err.message ?? 'Reset failed');
+      console.error('Reset confirm error:', JSON.stringify(err, null, 2));
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -154,6 +266,17 @@ export default function AuthScreen() {
       case 'forgotPassword': return handleForgotPassword();
       case 'resetConfirm': return handleResetConfirm();
     }
+  };
+
+  const switchMode = (newMode: AuthMode) => {
+    setError('');
+    setInfo('');
+    setConfirmCode('');
+    if (newMode === 'signup' || newMode === 'login') {
+      setConfirmPassword('');
+      setNewPassword('');
+    }
+    setMode(newMode);
   };
 
   const ctaLabel = {
@@ -185,7 +308,7 @@ export default function AuthScreen() {
             </View>
 
             <View style={styles.form}>
-              {(mode === 'login' || mode === 'signup' || mode === 'forgotPassword') && (
+              {(mode === 'login' || mode === 'signup' || mode === 'forgotPassword' || mode === 'confirm' || mode === 'resetConfirm') && (
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
@@ -194,8 +317,10 @@ export default function AuthScreen() {
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
                   autoComplete="email"
                   textContentType="emailAddress"
+                  editable={mode !== 'confirm' && mode !== 'resetConfirm'}
                 />
               )}
 
@@ -208,6 +333,7 @@ export default function AuthScreen() {
                   onChangeText={setPassword}
                   secureTextEntry
                   autoCapitalize="none"
+                  autoCorrect={false}
                   textContentType={mode === 'signup' ? 'newPassword' : 'password'}
                 />
               )}
@@ -221,6 +347,7 @@ export default function AuthScreen() {
                   onChangeText={setConfirmPassword}
                   secureTextEntry
                   autoCapitalize="none"
+                  autoCorrect={false}
                   textContentType="newPassword"
                 />
               )}
@@ -228,12 +355,14 @@ export default function AuthScreen() {
               {(mode === 'confirm' || mode === 'resetConfirm') && (
                 <TextInput
                   style={styles.input}
-                  placeholder="Confirmation Code"
+                  placeholder="Verification Code"
                   placeholderTextColor="rgba(255,255,255,0.4)"
                   value={confirmCode}
                   onChangeText={setConfirmCode}
                   keyboardType="number-pad"
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="oneTimeCode"
                 />
               )}
 
@@ -246,11 +375,13 @@ export default function AuthScreen() {
                   onChangeText={setNewPassword}
                   secureTextEntry
                   autoCapitalize="none"
+                  autoCorrect={false}
                   textContentType="newPassword"
                 />
               )}
 
               {error !== '' && <Text style={styles.error}>{error}</Text>}
+              {info !== '' && <Text style={styles.info}>{info}</Text>}
 
               <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                 <Pressable
@@ -268,8 +399,14 @@ export default function AuthScreen() {
                 </Pressable>
               </Animated.View>
 
+              {mode === 'confirm' && (
+                <Pressable onPress={handleResendCode} disabled={loading}>
+                  <Text style={styles.forgotText}>Didn't get a code? Resend</Text>
+                </Pressable>
+              )}
+
               {mode === 'login' && (
-                <Pressable onPress={() => { setError(''); setMode('forgotPassword'); }}>
+                <Pressable onPress={() => switchMode('forgotPassword')}>
                   <Text style={styles.forgotText}>Forgot password?</Text>
                 </Pressable>
               )}
@@ -277,28 +414,28 @@ export default function AuthScreen() {
 
             <View style={styles.toggleContainer}>
               {mode === 'login' && (
-                <Pressable onPress={() => { setError(''); setConfirmPassword(''); setMode('signup'); }}>
+                <Pressable onPress={() => switchMode('signup')}>
                   <Text style={styles.toggleText}>
                     New here? <Text style={styles.toggleHighlight}>Sign up</Text>
                   </Text>
                 </Pressable>
               )}
               {mode === 'signup' && (
-                <Pressable onPress={() => { setError(''); setConfirmPassword(''); setMode('login'); }}>
+                <Pressable onPress={() => switchMode('login')}>
                   <Text style={styles.toggleText}>
                     Already have an account? <Text style={styles.toggleHighlight}>Log in</Text>
                   </Text>
                 </Pressable>
               )}
               {mode === 'confirm' && (
-                <Pressable onPress={() => { setError(''); setMode('login'); }}>
+                <Pressable onPress={() => switchMode('login')}>
                   <Text style={styles.toggleText}>
                     Back to <Text style={styles.toggleHighlight}>Log in</Text>
                   </Text>
                 </Pressable>
               )}
               {(mode === 'forgotPassword' || mode === 'resetConfirm') && (
-                <Pressable onPress={() => { setError(''); setMode('login'); }}>
+                <Pressable onPress={() => switchMode('login')}>
                   <Text style={styles.toggleText}>
                     Back to <Text style={styles.toggleHighlight}>Log in</Text>
                   </Text>
@@ -362,6 +499,12 @@ const styles = StyleSheet.create({
   },
   error: {
     color: '#FF6B6B',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  info: {
+    color: '#4CD964',
     fontSize: 13,
     textAlign: 'center',
     fontWeight: '600',

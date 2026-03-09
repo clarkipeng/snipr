@@ -117,28 +117,43 @@ export default function FriendsScreen() {
         const q = searchQuery.trim();
         if (!q) {
             setSearchResults([]);
+            setSearchLoading(false);
             return;
         }
         let cancelled = false;
         setSearchLoading(true);
-        client.queries
-            .searchUsers({ query: q })
-            .then(({ data }) => {
-                if (!cancelled && data?.users) {
-                    setSearchResults(data.users);
-                }
-            })
-            .catch((err) => {
-                if (!cancelled) {
-                    console.error('Search failed:', err);
-                    setSearchResults([]);
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setSearchLoading(false);
-            });
+        const timeout = setTimeout(() => {
+            client.queries
+                .searchUsers({ query: q })
+                .then(({ data, errors }) => {
+                    if (cancelled) return;
+                    if (errors?.length) {
+                        console.error('Search errors:', JSON.stringify(errors));
+                    }
+                    const users = data?.users ?? [];
+                    const parsed = users
+                        .filter((u: any) => u != null)
+                        .map((u: any) => ({
+                            id: String(u.id),
+                            name: String(u.name ?? ''),
+                            email: String(u.email ?? ''),
+                            profilePicture: u.profilePicture ?? null,
+                        }));
+                    setSearchResults(parsed);
+                })
+                .catch((err) => {
+                    if (!cancelled) {
+                        console.error('Search failed:', JSON.stringify(err, null, 2));
+                        setSearchResults([]);
+                    }
+                })
+                .finally(() => {
+                    if (!cancelled) setSearchLoading(false);
+                });
+        }, 400);
         return () => {
             cancelled = true;
+            clearTimeout(timeout);
         };
     }, [searchQuery]);
 

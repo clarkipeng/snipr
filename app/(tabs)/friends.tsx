@@ -173,7 +173,12 @@ export default function FriendsScreen() {
     const acceptRequest = async (request: Schema['FriendRequest']['type']) => {
         if (!userId) return;
         try {
-            await client.mutations.acceptFriendRequest({ requestId: request.id });
+            const { data, errors } = await client.mutations.acceptFriendRequest({ requestId: request.id });
+            if (errors?.length) {
+                console.error('acceptFriendRequest errors:', JSON.stringify(errors, null, 2));
+                return;
+            }
+            console.log('acceptFriendRequest success:', data);
 
             setIncomingRequests(prev => prev.filter(r => r.id !== request.id));
             setPendingCount(Math.max(0, incomingRequests.length - 1));

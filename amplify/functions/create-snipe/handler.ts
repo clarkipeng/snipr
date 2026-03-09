@@ -11,7 +11,7 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: any) => {
     const { targetId, imageKey, caption } = event.arguments;
-    const { sub, email } = event.identity.claims;
+    const sub = event.identity?.sub || event.identity?.claims?.sub;
 
     const SNIPE_TABLE = process.env.SNIPE_TABLE_NAME!;
     const MESSAGE_TABLE = process.env.MESSAGE_TABLE_NAME!;
@@ -19,11 +19,13 @@ export const handler = async (event: any) => {
     const USER_PROFILE_TABLE = process.env.USER_PROFILE_TABLE_NAME!;
 
     try {
-        // 1. Resolve sniper ID from UserProfile using email
+        // 1. Resolve sniper ID from UserProfile using Cognito sub via owner field
+        const ownerValue = `${sub}::${sub}`;
         const userScan = await docClient.send(new ScanCommand({
             TableName: USER_PROFILE_TABLE,
-            FilterExpression: 'email = :email',
-            ExpressionAttributeValues: { ':email': email }
+            FilterExpression: '#owner = :owner',
+            ExpressionAttributeNames: { '#owner': 'owner' },
+            ExpressionAttributeValues: { ':owner': ownerValue }
         }));
 
         const sniper = userScan.Items?.[0];

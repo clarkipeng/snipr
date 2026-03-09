@@ -1,8 +1,8 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
     DynamoDBDocumentClient,
-    PutCommand,
-    ScanCommand
+    ScanCommand,
+    TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,63 +30,70 @@ export const handler = async (event: any) => {
         if (!sniper) throw new Error('Sniper profile not found');
         const sniperId = sniper.id;
 
-        // 2. Create the Snipe record
+        // 2. Find shared groups between sniper and target
+        const [sniperGroupsScan, targetGroupsScan] = await Promise.all([
+            docClient.send(new ScanCommand({
+                TableName: GROUP_MEMBER_TABLE,
+                FilterExpression: 'userId = :userId',
+                ExpressionAttributeValues: { ':userId': sniperId }
+            })),
+            docClient.send(new ScanCommand({
+                TableName: GROUP_MEMBER_TABLE,
+                FilterExpression: 'userId = :userId',
+                ExpressionAttributeValues: { ':userId': targetId }
+            })),
+        ]);
+
+        const sniperGroupIds = new Set(sniperGroupsScan.Items?.map((i: Record<string, any>) => i.groupId));
+        const sharedGroupIds = targetGroupsScan.Items
+            ?.map((i: Record<string, any>) => i.groupId)
+            .filter((id: string) => sniperGroupIds.has(id)) || [];
+
+        // 3. Atomic transaction: create the Snipe and all Messages in one operation
         const snipeId = uuidv4();
         const now = new Date().toISOString();
 
-        await docClient.send(new PutCommand({
-            TableName: SNIPE_TABLE,
-            Item: {
-                id: snipeId,
-                sniperId,
-                targetId,
-                imageKey,
-                caption,
-                owner: sub,
-                createdAt: now,
-                updatedAt: now,
-                __typename: 'Snipe'
-            }
-        }));
+        const transactItems: any[] = [
+            {
+                Put: {
+                    TableName: SNIPE_TABLE,
+                    Item: {
+                        id: snipeId,
+                        sniperId,
+                        targetId,
+                        imageKey,
+                        caption,
+                        owner: sub,
+                        createdAt: now,
+                        updatedAt: now,
+                        __typename: 'Snipe',
+                    },
+                },
+            },
+        ];
 
-        // 3. Find shared groups
-        // Fetch all group memberships for both users
-        const sniperGroupsScan = await docClient.send(new ScanCommand({
-            TableName: GROUP_MEMBER_TABLE,
-            FilterExpression: 'userId = :userId',
-            ExpressionAttributeValues: { ':userId': sniperId }
-        }));
-        const targetGroupsScan = await docClient.send(new ScanCommand({
-            TableName: GROUP_MEMBER_TABLE,
-            FilterExpression: 'userId = :userId',
-            ExpressionAttributeValues: { ':userId': targetId }
-        }));
-
-        const sniperGroupIds = new Set(sniperGroupsScan.Items?.map(i => i.groupId));
-        const sharedGroupIds = targetGroupsScan.Items
-            ?.map(i => i.groupId)
-            .filter(id => sniperGroupIds.has(id)) || [];
-
-        // 4. Create message records in shared groups
         for (const groupId of sharedGroupIds) {
-            await docClient.send(new PutCommand({
-                TableName: MESSAGE_TABLE,
-                Item: {
-                    id: uuidv4(),
-                    groupId,
-                    senderId: sniperId,
-                    snipeId,
-                    content: caption || '',
-                    isSystemMessage: false,
-                    owner: sub,
-                    createdAt: now,
-                    updatedAt: now,
-                    __typename: 'Message'
-                }
-            }));
+            transactItems.push({
+                Put: {
+                    TableName: MESSAGE_TABLE,
+                    Item: {
+                        id: uuidv4(),
+                        groupId,
+                        senderId: sniperId,
+                        snipeId,
+                        content: caption || '',
+                        isSystemMessage: false,
+                        owner: sub,
+                        createdAt: now,
+                        updatedAt: now,
+                        __typename: 'Message',
+                    },
+                },
+            });
         }
 
-        // Return the created snipe
+        await docClient.send(new TransactWriteCommand({ TransactItems: transactItems }));
+
         return {
             id: snipeId,
             sniperId,
@@ -95,7 +102,7 @@ export const handler = async (event: any) => {
             caption,
             createdAt: now,
             updatedAt: now,
-            __typename: 'Snipe'
+            __typename: 'Snipe',
         };
 
     } catch (error) {

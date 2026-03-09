@@ -1,9 +1,9 @@
 {
   "auth": {
-    "user_pool_id": "us-west-2_ttG5AgQI0",
+    "user_pool_id": "us-west-2_HEn5kfJU9",
     "aws_region": "us-west-2",
-    "user_pool_client_id": "2p2e5ij8hv0m066a6k1ob875pm",
-    "identity_pool_id": "us-west-2:569c6eb4-8beb-415f-b9c8-ee65c2c92377",
+    "user_pool_client_id": "ts76icjg05dlvgu1tqkb2e7v1",
+    "identity_pool_id": "us-west-2:4b622ffd-f26a-4f4d-bfd1-caaa92c1dacb",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email"
@@ -26,7 +26,7 @@
     "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://ve6dr4v4e5c4xa6uu4dy3em2ce.appsync-api.us-west-2.amazonaws.com/graphql",
+    "url": "https://5sjd4mnjfrerthpq5ly6omgfga.appsync-api.us-west-2.amazonaws.com/graphql",
     "aws_region": "us-west-2",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
     "authorization_types": [
@@ -942,7 +942,74 @@
         }
       },
       "enums": {},
-      "nonModels": {},
+      "nonModels": {
+        "SearchUserResult": {
+          "name": "SearchUserResult",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "email": {
+              "name": "email",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true,
+              "attributes": []
+            },
+            "profilePicture": {
+              "name": "profilePicture",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            }
+          }
+        },
+        "SearchUsersResponse": {
+          "name": "SearchUsersResponse",
+          "fields": {
+            "users": {
+              "name": "users",
+              "isArray": true,
+              "type": {
+                "nonModel": "SearchUserResult"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true
+            }
+          }
+        }
+      },
+      "queries": {
+        "searchUsers": {
+          "name": "searchUsers",
+          "isArray": false,
+          "type": {
+            "nonModel": "SearchUsersResponse"
+          },
+          "isRequired": false,
+          "arguments": {
+            "query": {
+              "name": "query",
+              "isArray": false,
+              "type": "String",
+              "isRequired": true
+            }
+          }
+        }
+      },
       "mutations": {
         "submitSnipe": {
           "name": "submitSnipe",
@@ -971,17 +1038,31 @@
               "isRequired": false
             }
           }
+        },
+        "acceptFriendRequest": {
+          "name": "acceptFriendRequest",
+          "isArray": false,
+          "type": "Boolean",
+          "isRequired": false,
+          "arguments": {
+            "requestId": {
+              "name": "requestId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true
+            }
+          }
         }
       }
     }
   },
   "storage": {
     "aws_region": "us-west-2",
-    "bucket_name": "amplify-snipr-clarkpeng-s-sniprstoragebucket75ada2-lnt6i11ysmhf",
+    "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
     "buckets": [
       {
         "name": "sniprStorage",
-        "bucket_name": "amplify-snipr-clarkpeng-s-sniprstoragebucket75ada2-lnt6i11ysmhf",
+        "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
         "aws_region": "us-west-2",
         "paths": {
           "snipes/*": {

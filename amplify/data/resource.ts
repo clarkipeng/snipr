@@ -23,6 +23,7 @@ const schema = a.schema({
       snipesReceived: a.hasMany('Snipe', 'targetId'),
       groupMemberships: a.hasMany('GroupMember', 'userId'),
       messages: a.hasMany('Message', 'senderId'),
+      snipeComments: a.hasMany('SnipeComment', 'userId'),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -60,10 +61,24 @@ const schema = a.schema({
       sniper: a.belongsTo('UserProfile', 'sniperId'),
       target: a.belongsTo('UserProfile', 'targetId'),
       messages: a.hasMany('Message', 'snipeId'),
+      comments: a.hasMany('SnipeComment', 'snipeId'),
     })
     .authorization((allow) => [
       allow.owner(),
       allow.authenticated().to(['read']),
+    ]),
+
+  SnipeComment: a
+    .model({
+      snipeId: a.id().required(),
+      userId: a.id().required(),
+      content: a.string().required(),
+      snipe: a.belongsTo('Snipe', 'snipeId'),
+      user: a.belongsTo('UserProfile', 'userId'),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read', 'create']),
     ]),
 
   Group: a

@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -41,8 +42,12 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [friendStatus, setFriendStatus] = useState<FriendStatus>('self');
   const [friendActionLoading, setFriendActionLoading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +69,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           : me ?? null;
 
         if (!targetProfile || cancelled) return;
+        if (!cancelled) setProfileId(targetProfile.id);
 
         const isViewingSelf = !userId || userId === meId;
 
@@ -155,6 +161,21 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
     }
   };
 
+  const saveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed || !profileId) return;
+    setSavingName(true);
+    try {
+      await client.models.UserProfile.update({ id: profileId, name: trimmed });
+      setProfile(prev => prev ? { ...prev, name: trimmed } : prev);
+      setEditingName(false);
+    } catch (err) {
+      console.error('Failed to update name:', err);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -184,7 +205,42 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           </View>
         )}
 
-        <Text style={styles.name}>{profile.name}</Text>
+        {editingName ? (
+          <View style={styles.editNameRow}>
+            <TextInput
+              style={styles.editNameInput}
+              value={nameInput}
+              onChangeText={setNameInput}
+              autoFocus
+              placeholder="Enter name"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              onSubmitEditing={saveName}
+              returnKeyType="done"
+              editable={!savingName}
+            />
+            <TouchableOpacity onPress={saveName} disabled={savingName || !nameInput.trim()} style={styles.editNameSave}>
+              <Text style={styles.editNameSaveText}>{savingName ? '...' : 'Save'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setEditingName(false)} style={styles.editNameCancel}>
+              <Text style={styles.editNameCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => {
+              if (friendStatus === 'self') {
+                setNameInput(profile.name);
+                setEditingName(true);
+              }
+            }}
+            disabled={friendStatus !== 'self'}
+          >
+            <View style={styles.nameRow}>
+              <Text style={styles.name}>{profile.name || 'Set your name'}</Text>
+              {friendStatus === 'self' && <Text style={styles.editHint}>tap to edit</Text>}
+            </View>
+          </TouchableOpacity>
+        )}
         <Text style={styles.email}>{profile.email}</Text>
 
         {friendStatus === 'friends' && (
@@ -314,11 +370,58 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255,255,255,0.6)',
   },
+  nameRow: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   name: {
     fontSize: 26,
     fontWeight: '800',
     color: '#fff',
+  },
+  editHint: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.25)',
+    marginTop: 2,
+  },
+  editNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 4,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  editNameInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    minWidth: 160,
+    textAlign: 'center',
+  },
+  editNameSave: {
+    backgroundColor: '#34C759',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  editNameSaveText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  editNameCancel: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  editNameCancelText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+    fontSize: 14,
   },
   email: {
     fontSize: 14,

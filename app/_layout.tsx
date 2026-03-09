@@ -1,24 +1,24 @@
+import 'react-native-get-random-values';
+import 'react-native-url-polyfill/auto';
+import 'react-native-reanimated';
+import '@aws-amplify/react-native';
+
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
+import { Amplify } from 'aws-amplify';
+import { fetchUserAttributes } from 'aws-amplify/auth';
+import { generateClient } from 'aws-amplify/data';
+
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View } from 'react-native';
-import '@aws-amplify/react-native';
-import 'react-native-get-random-values';
-import 'react-native-reanimated';
-import 'react-native-url-polyfill/auto';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 import AuthScreen from '@/components/AuthScreen';
 import { PendingRequestsProvider } from '@/context/PendingRequestsContext';
-import { Amplify } from 'aws-amplify';
-import outputs from '../amplify_outputs.json';
-
 import type { Schema } from '@/amplify/data/resource';
-import { fetchUserAttributes } from 'aws-amplify/auth';
-import { generateClient } from 'aws-amplify/data';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator } from 'react-native';
 import ProfileSetup from '../components/ProfileSetup';
+import outputs from '../amplify_outputs.json';
 
 Amplify.configure(outputs);
 

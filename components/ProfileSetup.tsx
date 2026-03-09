@@ -54,8 +54,15 @@ export default function ProfileSetup({ onComplete }: ProfileSetupScreenProps) {
             const email = attributes.email;
             if (!email || !identityId) throw new Error('No user info found');
 
-            const response = await fetch(image);
-            const blob = await response.blob();
+            const response = await new Promise<XMLHttpRequest>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.onload = () => resolve(xhr);
+                xhr.onerror = () => reject(new Error('Failed to load image'));
+                xhr.responseType = 'blob';
+                xhr.open('GET', image, true);
+                xhr.send(null);
+            });
+            const blob = response.response as Blob;
             const path = `public/profiles/${identityId}/profile.jpg`;
             await uploadData({ path, data: blob }).result;
 

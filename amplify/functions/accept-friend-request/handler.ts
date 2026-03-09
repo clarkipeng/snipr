@@ -12,13 +12,13 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 export const handler = async (event: any) => {
   const { requestId } = event.arguments;
-  const { email } = event.identity?.claims ?? {};
+  const sub = event.identity?.sub || event.identity?.claims?.sub;
 
   const FRIENDSHIP_TABLE = process.env.FRIENDSHIP_TABLE_NAME!;
   const FRIEND_REQUEST_TABLE = process.env.FRIEND_REQUEST_TABLE_NAME!;
   const USER_PROFILE_TABLE = process.env.USER_PROFILE_TABLE_NAME!;
 
-  if (!requestId || !email) {
+  if (!requestId || !sub) {
     throw new Error('Missing requestId or user identity');
   }
 
@@ -36,12 +36,14 @@ export const handler = async (event: any) => {
       throw new Error('Friend request not found');
     }
 
-    // 2. Resolve current user (receiver) profile ID
+    // 2. Resolve current user (receiver) profile ID using Cognito sub
+    const ownerValue = `${sub}::${sub}`;
     const userScan = await docClient.send(
       new ScanCommand({
         TableName: USER_PROFILE_TABLE,
-        FilterExpression: 'email = :email',
-        ExpressionAttributeValues: { ':email': email },
+        FilterExpression: '#owner = :owner',
+        ExpressionAttributeNames: { '#owner': 'owner' },
+        ExpressionAttributeValues: { ':owner': ownerValue },
       })
     );
 

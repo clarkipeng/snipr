@@ -189,6 +189,31 @@ export function SnipeCard({
             <Text style={styles.caption}>{caption}</Text>
           </View>
         )}
+
+        <View style={styles.voteRow}>
+          <Pressable
+            style={[styles.voteButton, styles.voteButtonUp]}
+            onPress={() => {
+              // TODO: wire up upvote mutation
+            }}
+          >
+            <Text style={styles.voteButtonText}>▲ Upvote</Text>
+          </Pressable>
+
+          <View style={styles.voteScoreContainer}>
+            {/* Placeholder: will become (upvotes - downvotes) */}
+            <Text style={styles.voteScoreText}>0</Text>
+          </View>
+
+          <Pressable
+            style={[styles.voteButton, styles.voteButtonDown]}
+            onPress={() => {
+              // TODO: wire up downvote mutation
+            }}
+          >
+            <Text style={styles.voteButtonText}>▼ Downvote</Text>
+          </Pressable>
+        </View>
       </Pressable>
 
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
@@ -332,6 +357,41 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: 14,
     lineHeight: 20,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  voteButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  voteButtonUp: {
+    backgroundColor: 'rgba(76, 217, 100, 0.16)',
+  },
+  voteButtonDown: {
+    backgroundColor: 'rgba(255, 59, 48, 0.16)',
+  },
+  voteButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  voteScoreContainer: {
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  voteScoreText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: 'rgba(255,255,255,0.8)',
   },
   commentToggle: {

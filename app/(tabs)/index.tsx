@@ -1,6 +1,7 @@
 import type { Schema } from '@/amplify/data/resource';
 import { SkeletonCard } from '@/components/SkeletonCard';
 import { SnipeCard } from '@/components/SnipeCard';
+import { checkAndAwardBadges } from '@/utils/badge-checker';
 import { getCachedUrl } from '@/utils/url-cache';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
@@ -91,6 +92,13 @@ export default function HomeScreen() {
       );
 
       setFeed(items);
+
+      // Check and award badges for current user (run in background)
+      if (currentUserId) {
+        checkAndAwardBadges(currentUserId).catch(err => {
+          console.error('Failed to check badges:', err);
+        });
+      }
     } catch (err) {
       console.error('Failed to load feed:', err);
       setError('Failed to load feed. Pull down to retry.');

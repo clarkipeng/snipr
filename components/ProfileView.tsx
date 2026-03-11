@@ -1,5 +1,6 @@
 import type { Schema } from '@/amplify/data/resource';
 import { getCachedUrl } from '@/utils/url-cache';
+import { BADGE_INFO, type BadgeType, getUserBadges } from '@/utils/badge-checker';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
@@ -56,6 +57,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const [editingStatus, setEditingStatus] = useState(false);
   const [statusInput, setStatusInput] = useState('');
   const [savingStatus, setSavingStatus] = useState(false);
+  const [badges, setBadges] = useState<Array<{ badgeType: BadgeType; awardedAt: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +145,14 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         if (!cancelled) {
           setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        }
+
+        // Load badges
+        if (targetProfile.id) {
+          const userBadges = await getUserBadges(targetProfile.id);
+          if (!cancelled) {
+            setBadges(userBadges);
+          }
         }
       } catch (err) {
         console.error('Failed to load profile:', err);
@@ -293,6 +303,23 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           </TouchableOpacity>
         )}
         <Text style={styles.email}>{profile.email}</Text>
+
+        {badges.length > 0 && (
+          <View style={styles.badgesContainer}>
+            {badges.map((badge) => {
+              const info = BADGE_INFO[badge.badgeType];
+              return (
+                <View key={badge.badgeType} style={styles.badge}>
+                  <Text style={styles.badgeEmoji}>{info.emoji}</Text>
+                  <View style={styles.badgeTextContainer}>
+                    <Text style={styles.badgeName}>{info.name}</Text>
+                    <Text style={styles.badgeDescription}>{info.description}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {editingStatus ? (
           <View style={styles.editStatusContainer}>
@@ -885,5 +912,36 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '700',
     fontSize: 14,
+  },
+  badgesContainer: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 20,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+  },
+  badgeEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  badgeTextContainer: {
+    flex: 1,
+  },
+  badgeName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFD700',
+    marginBottom: 2,
+  },
+  badgeDescription: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
   },
 });

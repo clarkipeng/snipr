@@ -1,6 +1,7 @@
 import type { Schema } from '@/amplify/data/resource';
 import { FriendRow } from '@/components/FriendRow';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { checkAndAwardBadges } from '@/utils/badge-checker';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { uploadData } from 'aws-amplify/storage';
@@ -110,6 +111,14 @@ export default function SnipingScreen() {
                 caption: caption.trim() || undefined,
             });
             if (errors) throw new Error('Failed to create snipe');
+
+            // Check and award badges after successful snipe
+            if (currentUserProfile?.id) {
+                const newBadges = await checkAndAwardBadges(currentUserProfile.id);
+                if (newBadges.length > 0) {
+                    console.log('Earned new badges:', newBadges);
+                }
+            }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setStatus('Snipe sent!');

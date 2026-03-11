@@ -27,6 +27,7 @@ const schema = a.schema({
       messages: a.hasMany('Message', 'senderId'),
       snipeComments: a.hasMany('SnipeComment', 'userId'),
       snipeReactions: a.hasMany('SnipeReaction', 'userId'),
+      badges: a.hasMany('UserBadge', 'userId'),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -96,6 +97,18 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.owner(),
       allow.authenticated().to(['read', 'create', 'delete']),
+    ]),
+
+  UserBadge: a
+    .model({
+      userId: a.id().required(),
+      badgeType: a.string().required(),
+      awardedAt: a.datetime().required(),
+      user: a.belongsTo('UserProfile', 'userId'),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(['read']),
     ]),
 
   Group: a

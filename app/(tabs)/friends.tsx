@@ -241,7 +241,7 @@ export default function FriendsScreen() {
                 </View>
                 {activeTab === 'friends' && (
                     <TouchableOpacity
-                        onPress={() => removeFriend(item)}
+                        onPress={() => removeFriend(item as Schema['UserProfile']['type'])}
                         style={[styles.actionButton, styles.unfriendButton]}
                     >
                         <Text style={styles.actionButtonText}>Unfriend</Text>

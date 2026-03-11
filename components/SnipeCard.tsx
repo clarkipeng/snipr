@@ -1,7 +1,7 @@
 import type { Schema } from '@/amplify/data/resource';
 import { LinearGradient } from 'expo-linear-gradient';
 import { generateClient } from 'aws-amplify/data';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -12,6 +12,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ReactionPicker } from './ReactionPicker';
+import { ReactionBar } from './ReactionBar';
 
 const client = generateClient<Schema>();
 
@@ -20,6 +22,13 @@ type Comment = {
   content: string;
   userName: string;
   createdAt: string;
+};
+
+type Reaction = {
+  emoji: string;
+  count: number;
+  userIds: string[];
+  hasReacted: boolean;
 };
 
 type SnipeCardProps = {
@@ -76,6 +85,9 @@ export function SnipeCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [loadingReactions, setLoadingReactions] = useState(false);
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -155,6 +167,106 @@ export function SnipeCard({
     }
   };
 
+  const loadReactions = useCallback(async () => {
+    setLoadingReactions(true);
+    try {
+      const { data } = await client.models.SnipeReaction.list({
+        filter: { snipeId: { eq: snipeId } },
+        limit: 100,
+      });
+
+      const grouped = new Map<string, { userIds: string[]; reactionIds: string[] }>();
+      data.forEach((r) => {
+        if (!grouped.has(r.emoji)) {
+          grouped.set(r.emoji, { userIds: [], reactionIds: [] });
+        }
+        grouped.get(r.emoji)!.userIds.push(r.userId);
+        grouped.get(r.emoji)!.reactionIds.push(r.id);
+      });
+
+      const mapped: Reaction[] = Array.from(grouped.entries()).map(([emoji, info]) => ({
+        emoji,
+        count: info.userIds.length,
+        userIds: info.userIds,
+        hasReacted: currentUserId ? info.userIds.includes(currentUserId) : false,
+      }));
+
+      setReactions(mapped);
+    } catch (err) {
+      console.error('Failed to load reactions:', err);
+    } finally {
+      setLoadingReactions(false);
+    }
+  }, [snipeId, currentUserId]);
+
+  useEffect(() => {
+    loadReactions();
+  }, [loadReactions]);
+
+  const handleReactionSelect = async (emoji: string) => {
+    if (!currentUserId) return;
+    setShowReactionPicker(false);
+
+    const existingReaction = reactions.find((r) => r.emoji === emoji && r.hasReacted);
+
+    if (existingReaction) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
+    }
+  };
+
+  const handleReactionPress = async (emoji: string) => {
+    if (!currentUserId) return;
+
+    const reaction = reactions.find((r) => r.emoji === emoji);
+    if (!reaction) return;
+
+    if (reaction.hasReacted) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
+    }
+  };
+
   return (
     <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
       <Pressable
@@ -190,6 +302,22 @@ export function SnipeCard({
           </View>
         )}
       </Pressable>
+
+      <View style={styles.reactionSection}>
+        <ReactionBar
+          reactions={reactions}
+          onReactionPress={handleReactionPress}
+          onAddPress={() => setShowReactionPicker(!showReactionPicker)}
+        />
+        {showReactionPicker && (
+          <View style={styles.reactionPickerContainer}>
+            <ReactionPicker
+              visible={showReactionPicker}
+              onReactionSelect={handleReactionSelect}
+            />
+          </View>
+        )}
+      </View>
 
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
         <Text style={styles.commentToggleText}>
@@ -411,5 +539,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#fff',
+  },
+  reactionSection: {
+    backgroundColor: '#15151B',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
+  },
+  reactionPickerContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
   },
 });

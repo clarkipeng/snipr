@@ -1,10 +1,10 @@
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
-import 'react-native-reanimated';
 import '@aws-amplify/react-native';
+import 'react-native-reanimated';
 
-import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
 import { Amplify } from 'aws-amplify';
+import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react-native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 
@@ -38,6 +38,7 @@ const SniprDarkTheme = {
   },
 };
 
+// Generate client AFTER Amplify.configure()
 const client = generateClient<Schema>();
 
 function LayoutContent() {

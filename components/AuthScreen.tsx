@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Amplify } from 'aws-amplify';
 import {
   signIn,
   signOut,
@@ -27,6 +28,21 @@ type AuthMode = 'login' | 'signup' | 'confirm' | 'forgotPassword' | 'resetConfir
 
 function getAuthErrorMessage(err: any): string {
   if (typeof err === 'string') return err;
+
+  // Check error name first (more reliable for Amplify errors)
+  const name = err?.name || '';
+  if (name === 'UserAlreadyAuthenticatedException') return 'Already signed in. Restarting...';
+  if (name === 'UserNotConfirmedException') return 'Please verify your email first.';
+  if (name === 'NotAuthorizedException') return 'Incorrect email or password.';
+  if (name === 'UserNotFoundException') return 'No account found with that email.';
+  if (name === 'UsernameExistsException') return 'An account with this email already exists.';
+  if (name === 'CodeMismatchException') return 'Invalid verification code.';
+  if (name === 'ExpiredCodeException') return 'Code has expired. Please resend.';
+  if (name === 'LimitExceededException') return 'Too many attempts. Please wait and try again.';
+  if (name === 'InvalidPasswordException') return 'Password must be 8+ characters with uppercase, lowercase, number, and symbol.';
+  if (name === 'InvalidParameterException') return 'Please check your input and try again.';
+
+  // Fallback to message checking
   const message = err?.message || err?.code || '';
   if (message.includes('UserAlreadyAuthenticatedException')) return 'Already signed in. Restarting...';
   if (message.includes('UserNotConfirmedException')) return 'Please verify your email first.';
@@ -38,6 +54,7 @@ function getAuthErrorMessage(err: any): string {
   if (message.includes('LimitExceededException')) return 'Too many attempts. Please wait and try again.';
   if (message.includes('InvalidPasswordException')) return 'Password must be 8+ characters with uppercase, lowercase, number, and symbol.';
   if (message.includes('InvalidParameterException')) return 'Please check your input and try again.';
+
   return message || 'Something went wrong. Please try again.';
 }
 
@@ -61,6 +78,21 @@ export default function AuthScreen() {
       duration: 800,
       useNativeDriver: true,
     }).start();
+
+    // Verify Amplify is configured
+    try {
+      const config = Amplify.getConfig();
+      console.log('[AUTH INIT] Amplify configured on AuthScreen mount:', !!config.Auth);
+      console.log('[AUTH INIT] User Pool ID:', config.Auth?.Cognito?.userPoolId);
+      console.log('[AUTH INIT] User Pool Client ID:', config.Auth?.Cognito?.userPoolClientId);
+
+      // Test basic network connectivity
+      fetch('https://www.google.com', { method: 'HEAD' })
+        .then(() => console.log('[AUTH INIT] Network test: SUCCESS'))
+        .catch((err) => console.error('[AUTH INIT] Network test: FAILED', err));
+    } catch (err) {
+      console.error('[AUTH INIT] Failed to get Amplify config:', err);
+    }
   }, []);
 
   const animatePressIn = () => {
@@ -91,9 +123,18 @@ export default function AuthScreen() {
     setInfo('');
     setLoading(true);
     try {
-      // Diagnostic: check crypto + network
+      // Diagnostic: check crypto + network + Amplify config
       const hasCrypto = typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function';
       console.log('[AUTH DEBUG] crypto.getRandomValues available:', hasCrypto);
+
+      try {
+        const config = Amplify.getConfig();
+        console.log('[AUTH DEBUG] Amplify configured:', !!config.Auth);
+        console.log('[AUTH DEBUG] User pool ID:', config.Auth?.Cognito?.userPoolId);
+      } catch (configErr) {
+        console.error('[AUTH DEBUG] Amplify config error:', configErr);
+      }
+
       try {
         const res = await fetch('https://cognito-idp.us-west-2.amazonaws.com/', { method: 'POST', headers: { 'Content-Type': 'application/x-amz-json-1.1' } });
         console.log('[AUTH DEBUG] Cognito endpoint reachable, status:', res.status);
@@ -104,19 +145,43 @@ export default function AuthScreen() {
         return;
       }
 
-      try { await signOut({ global: true }); } catch (_) {}
+      try { await signOut({ global: true }); } catch { }
+      console.log('[AUTH DEBUG] Attempting sign in with email:', trimmedEmail);
       const result: SignInOutput = await signIn({ username: trimmedEmail, password });
       if (result.nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
         setMode('confirm');
         setInfo('Please check your email for the verification code.');
       }
     } catch (err: any) {
+      console.error('Login error FULL:', err);
       console.error('Login error name:', err?.name);
       console.error('Login error message:', err?.message);
+      console.error('Login error recoverySuggestion:', err?.recoverySuggestion);
+      console.error('Login error cause:', err?.cause);
       console.error('Login error stack:', err?.stack);
       console.error('Login error underlying:', JSON.stringify(err?.underlyingError));
+      console.error('Login error keys:', Object.keys(err || {}));
+
+      // Check if there's a nested error
+      if (err?.underlyingError) {
+        console.error('Underlying error keys:', Object.keys(err.underlyingError || {}));
+        console.error('Underlying error toString:', String(err.underlyingError));
+      }
+
+      // Check constructor name
+      console.error('Error constructor:', err?.constructor?.name);
+
+      // Try to get more info from prototype chain
+      let proto = Object.getPrototypeOf(err);
+      console.error('Error prototype chain:', proto?.constructor?.name);
+
       const msg = getAuthErrorMessage(err);
-      if (msg.includes('verify your email')) {
+
+      // Special handling for Unknown errors - they might need verification
+      if (err?.name === 'Unknown') {
+        console.warn('[AUTH] Unknown error detected - this might mean unverified email or wrong credentials');
+        setError('Unable to sign in. Please check your email and password, or try signing up if you don\'t have an account yet.');
+      } else if (msg.includes('verify your email')) {
         setMode('confirm');
         setInfo('Please check your email for the verification code.');
       } else {
@@ -155,8 +220,19 @@ export default function AuthScreen() {
         setInfo('Verification code sent to your email.');
       }
     } catch (err: any) {
-      console.error('Signup error:', JSON.stringify(err, null, 2));
-      setError(getAuthErrorMessage(err));
+      console.error('Signup error FULL:', err);
+      console.error('Signup error name:', err?.name);
+      console.error('Signup error message:', err?.message);
+      console.error('Signup error recoverySuggestion:', err?.recoverySuggestion);
+      console.error('Signup error cause:', err?.cause);
+
+      const msg = getAuthErrorMessage(err);
+      if (err?.name === 'Unknown') {
+        console.warn('[AUTH] Unknown signup error - check Amplify configuration');
+        setError('Unable to create account. Please try again or check your internet connection.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -176,12 +252,48 @@ export default function AuthScreen() {
     setInfo('');
     setLoading(true);
     try {
+      console.log('[CONFIRM] Starting confirmSignUp for:', trimmedEmail);
       await confirmSignUp({ username: trimmedEmail, confirmationCode: confirmCode.trim() });
-      try { await signOut({ global: true }); } catch (_) {}
+      console.log('[CONFIRM] confirmSignUp SUCCESS');
+
+      console.log('[CONFIRM] Signing out any existing session...');
+      try { await signOut({ global: true }); } catch { }
+
+      // Small delay to let Cognito fully activate the user
+      console.log('[CONFIRM] Waiting 500ms for Cognito to activate user...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[CONFIRM] Attempting auto sign-in for:', trimmedEmail);
       await signIn({ username: trimmedEmail, password });
+      console.log('[CONFIRM] Auto sign-in SUCCESS');
     } catch (err: any) {
-      console.error('Confirm error:', JSON.stringify(err, null, 2));
-      setError(getAuthErrorMessage(err));
+      console.error('Confirm error FULL:', err);
+      console.error('Confirm error name:', err?.name);
+      console.error('Confirm error message:', err?.message);
+      console.error('Confirm error recoverySuggestion:', err?.recoverySuggestion);
+      console.error('Confirm error cause:', err?.cause);
+
+      // Check if it's just the auto-login that failed AFTER successful confirmation
+      if (err?.message?.includes('Current status is CONFIRMED')) {
+        // User is already confirmed, just switch to login mode
+        console.log('[CONFIRM] User already confirmed, switching to login');
+        setMode('login');
+        setInfo('Email verified! Please log in with your credentials.');
+        setError('');
+        setLoading(false);
+        return;
+      }
+
+      const msg = getAuthErrorMessage(err);
+      if (err?.name === 'Unknown') {
+        // Unknown error during auto-login - user might be confirmed but login failed
+        console.warn('[AUTH] Unknown error during auto-login - user may be confirmed but sign-in failed');
+        setMode('login');
+        setInfo('Email verified! Please log in manually.');
+        setError('');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -401,7 +513,7 @@ export default function AuthScreen() {
 
               {mode === 'confirm' && (
                 <Pressable onPress={handleResendCode} disabled={loading}>
-                  <Text style={styles.forgotText}>Didn't get a code? Resend</Text>
+                  <Text style={styles.forgotText}>Didn&apos;t get a code? Resend</Text>
                 </Pressable>
               )}
 

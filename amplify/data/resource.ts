@@ -15,6 +15,8 @@ const schema = a.schema({
       name: a.string().required(),
       email: a.string().required(),
       profilePicture: a.string(),
+      bio: a.string(),
+      status: a.string(),
       friends: a.hasMany('Friendship', 'userId'),
       friendOf: a.hasMany('Friendship', 'friendId'),
       sentRequests: a.hasMany('FriendRequest', 'senderId'),

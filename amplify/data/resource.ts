@@ -2,6 +2,7 @@ import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
 import { acceptFriendRequestFunction } from "../functions/accept-friend-request/resource";
 import { createSnipeFunction } from "../functions/create-snipe/resource";
 import { searchUsersFunction } from "../functions/search-users/resource";
+import { updateSnipeScoreFunction } from "../functions/update-snipe-score/resource";
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -145,6 +146,16 @@ const schema = a.schema({
     .arguments({ query: a.string().required() })
     .returns(a.ref("SearchUsersResponse"))
     .handler(a.handler.function(searchUsersFunction))
+    .authorization((allow) => [allow.authenticated()]),
+
+  updateSnipeScore: a
+    .mutation()
+    .arguments({
+      snipeId: a.id().required(),
+      delta: a.integer().required(),
+    })
+    .returns(a.ref("Snipe"))
+    .handler(a.handler.function(updateSnipeScoreFunction))
     .authorization((allow) => [allow.authenticated()]),
 });
 

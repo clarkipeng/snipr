@@ -4,6 +4,7 @@ import { data } from "./data/resource";
 import { acceptFriendRequestFunction } from "./functions/accept-friend-request/resource";
 import { createSnipeFunction } from "./functions/create-snipe/resource";
 import { searchUsersFunction } from "./functions/search-users/resource";
+import { updateSnipeScoreFunction } from "./functions/update-snipe-score/resource";
 import { storage } from "./storage/resource";
 
 /**
@@ -16,20 +17,28 @@ const backend = defineBackend({
   createSnipeFunction,
   acceptFriendRequestFunction,
   searchUsersFunction,
+  updateSnipeScoreFunction,
 });
 
 const snipeLambda = backend.createSnipeFunction.resources.lambda as any;
-const acceptFriendLambda = backend.acceptFriendRequestFunction.resources
-  .lambda as any;
+const acceptFriendLambda =
+  backend.acceptFriendRequestFunction.resources.lambda as any;
+const updateSnipeScoreLambda =
+  backend.updateSnipeScoreFunction.resources.lambda as any;
 const tables = backend.data.resources.tables;
 
 // Grant read/write to tables for create-snipe
 tables["Snipe"].grantReadWriteData(snipeLambda);
+tables["Snipe"].grantReadWriteData(updateSnipeScoreLambda);
 tables["Message"].grantReadWriteData(snipeLambda);
 tables["GroupMember"].grantReadData(snipeLambda);
 tables["UserProfile"].grantReadData(snipeLambda);
 
 snipeLambda.addEnvironment("SNIPE_TABLE_NAME", tables["Snipe"].tableName);
+updateSnipeScoreLambda.addEnvironment(
+  "SNIPE_TABLE_NAME",
+  tables["Snipe"].tableName,
+);
 snipeLambda.addEnvironment("MESSAGE_TABLE_NAME", tables["Message"].tableName);
 snipeLambda.addEnvironment(
   "GROUP_MEMBER_TABLE_NAME",

@@ -1216,6 +1216,28 @@
               "isRequired": true
             }
           }
+        },
+        "updateSnipeScore": {
+          "name": "updateSnipeScore",
+          "isArray": false,
+          "type": {
+            "model": "Snipe"
+          },
+          "isRequired": false,
+          "arguments": {
+            "snipeId": {
+              "name": "snipeId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true
+            },
+            "delta": {
+              "name": "delta",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true
+            }
+          }
         }
       }
     }

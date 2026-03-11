@@ -79,12 +79,30 @@ export function SnipeCard({
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
   const [localScore, setLocalScore] = useState<number>(typeof score === 'number' ? score : 0);
+  const [updatingScore, setUpdatingScore] = useState(false);
 
   useEffect(() => {
     if (typeof score === 'number') {
       setLocalScore(score);
     }
   }, [score]);
+
+  const changeScore = async (delta: number) => {
+    if (updatingScore) return;
+    const next = localScore + delta;
+    setLocalScore(next);
+    try {
+      setUpdatingScore(true);
+      await client.mutations.updateSnipeScore({
+        snipeId,
+        delta,
+      });
+    } catch (e) {
+      console.warn('Failed to update snipe score:', e);
+    } finally {
+      setUpdatingScore(false);
+    }
+  };
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -203,7 +221,7 @@ export function SnipeCard({
           <Pressable
             style={[styles.voteButton, styles.voteButtonUp]}
             onPress={() => {
-              setLocalScore((prev) => prev + 1);
+              changeScore(1);
             }}
           >
             <Text style={styles.voteButtonText}>▲ Upvote</Text>
@@ -218,7 +236,7 @@ export function SnipeCard({
           <Pressable
             style={[styles.voteButton, styles.voteButtonDown]}
             onPress={() => {
-              setLocalScore((prev) => prev - 1);
+              changeScore(-1);
             }}
           >
             <Text style={styles.voteButtonText}>▼ Downvote</Text>

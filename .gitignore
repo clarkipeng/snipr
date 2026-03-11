@@ -44,6 +44,7 @@ app-example
 
 # amplify
 .amplify
+amplify_outputs.json
 amplifyconfiguration*
 
 #

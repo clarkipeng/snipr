@@ -1,4 +1,5 @@
 import type { Schema } from '@/amplify/data/resource';
+import { getCachedUrl } from '@/utils/url-cache';
 import { LinearGradient } from 'expo-linear-gradient';
 import { generateClient } from 'aws-amplify/data';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -21,6 +22,7 @@ type Comment = {
   id: string;
   content: string;
   userName: string;
+  userProfilePicture: string | null;
   createdAt: string;
 };
 
@@ -40,7 +42,7 @@ type SnipeCardProps = {
   caption: string | null;
   createdAt: string;
   currentUserId: string | null;
-  userMap: Map<string, { id: string; name: string; email?: string }>;
+  userMap: Map<string, { id: string; name: string; email?: string; profilePicture?: string | null }>;
 };
 
 function formatTime(dateStr: string) {
@@ -118,11 +120,19 @@ export function SnipeCard({
       // #region agent log
       fetch('http://127.0.0.1:7897/ingest/0e95db31-a5bc-4ad5-9951-34c58685161d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'57a908'},body:JSON.stringify({sessionId:'57a908',location:'SnipeCard.tsx:loadComments',message:'comment data and userMap',data:{comments:sorted.map((c:any)=>({id:c.id,userId:c.userId,content:c.content})),userMapKeys:[...userMap.keys()],userMapSize:userMap.size},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-      const mapped: Comment[] = sorted.map((c) => {
+      const mapped: Comment[] = await Promise.all(sorted.map(async (c) => {
         const u = userMap.get(c.userId);
         const displayName = u?.name || u?.email?.split('@')[0] || 'Unknown';
-        return { id: c.id, content: c.content, userName: displayName, createdAt: c.createdAt };
-      });
+        const profilePicPath = u?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+        return {
+          id: c.id,
+          content: c.content,
+          userName: displayName,
+          userProfilePicture: profilePicUrl,
+          createdAt: c.createdAt
+        };
+      }));
       setComments(mapped);
       setCommentCount(mapped.length);
     } catch (err) {
@@ -150,10 +160,15 @@ export function SnipeCard({
         content: text,
       });
       if (newComment) {
+        const currentUser = userMap.get(currentUserId);
+        const profilePicPath = currentUser?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+
         const entry: Comment = {
           id: newComment.id,
           content: newComment.content,
-          userName: userMap.get(currentUserId)?.name || userMap.get(currentUserId)?.email?.split('@')[0] || 'You',
+          userName: currentUser?.name || currentUser?.email?.split('@')[0] || 'You',
+          userProfilePicture: profilePicUrl,
           createdAt: newComment.createdAt,
         };
         setComments((prev) => [...prev, entry]);
@@ -338,12 +353,23 @@ export function SnipeCard({
           ) : (
             comments.map((c) => (
               <View key={c.id} style={styles.commentRow}>
-                <Text style={styles.commentText}>
-                  <Text style={styles.commentAuthor}>{c.userName}</Text>
-                  {'  '}
-                  {c.content}
-                </Text>
-                <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                {c.userProfilePicture ? (
+                  <Image source={{ uri: c.userProfilePicture }} style={styles.commentAvatar} />
+                ) : (
+                  <View style={[styles.commentAvatar, styles.commentAvatarPlaceholder]}>
+                    <Text style={styles.commentAvatarInitial}>
+                      {c.userName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.commentContent}>
+                  <Text style={styles.commentText}>
+                    <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    {'  '}
+                    {c.content}
+                  </Text>
+                  <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                </View>
               </View>
             ))
           )}
@@ -489,12 +515,31 @@ const styles = StyleSheet.create({
   },
   commentRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     paddingVertical: 6,
-    gap: 8,
+    gap: 10,
+  },
+  commentAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 2,
+  },
+  commentAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentAvatarInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  commentContent: {
+    flex: 1,
+    gap: 2,
   },
   commentText: {
-    flex: 1,
     fontSize: 13,
     color: 'rgba(255,255,255,0.75)',
     lineHeight: 18,
@@ -506,7 +551,6 @@ const styles = StyleSheet.create({
   commentTime: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.3)',
-    flexShrink: 0,
   },
   commentInputRow: {
     flexDirection: 'row',

@@ -10,7 +10,7 @@ import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
 
-type UserEntry = { id: string; name: string; email?: string };
+type UserEntry = { id: string; name: string; email?: string; profilePicture?: string | null };
 
 type FeedItem = {
   id: string;
@@ -57,7 +57,7 @@ export default function HomeScreen() {
       });
 
       const uMap = new Map(allUsers.map(u => [u.id, u]));
-      setUserMap(new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, email: u.email }])));
+      setUserMap(new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, email: u.email, profilePicture: u.profilePicture }])));
       setCurrentUserId(currentUser?.id ?? null);
 
       // Rule: You must be friends with BOTH the sniper AND the target (or be one of them)

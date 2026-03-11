@@ -264,7 +264,8 @@ export default function GroupsScreen() {
       });
 
       chronSnipes.forEach(s => {
-        scores.set(s.sniperId, (scores.get(s.sniperId) || 0) + 1);
+        const snipeScore = typeof s.score === 'number' ? s.score : 0;
+        scores.set(s.sniperId, (scores.get(s.sniperId) || 0) + snipeScore);
         if (!streaks.has(s.sniperId)) streaks.set(s.sniperId, new Map());
         if (!streaks.has(s.targetId)) streaks.set(s.targetId, new Map());
 

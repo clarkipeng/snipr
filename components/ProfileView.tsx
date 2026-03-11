@@ -26,6 +26,8 @@ type ProfileData = {
   profilePictureUrl: string | null;
   snipesMade: number;
   snipesReceived: number;
+  currentStreak: number;
+  longestStreak: number;
   recentSnipeUrls: string[];
   topSnipers: {
     user: Schema['UserProfile']['type'];
@@ -131,6 +133,8 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           profilePictureUrl,
           snipesMade: made.length,
           snipesReceived: received.length,
+          currentStreak: targetProfile.currentStreak || 0,
+          longestStreak: targetProfile.longestStreak || 0,
           recentSnipeUrls: [],
           topSnipers,
         });
@@ -320,6 +324,24 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
             })}
           </View>
         )}
+
+        <View style={styles.streakContainer}>
+          <View style={styles.streakCard}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <View style={styles.streakInfo}>
+              <Text style={styles.streakNumber}>{profile.currentStreak}</Text>
+              <Text style={styles.streakLabel}>Day Streak</Text>
+            </View>
+          </View>
+          <View style={styles.streakDivider} />
+          <View style={styles.streakCard}>
+            <Text style={styles.streakEmoji}>⭐</Text>
+            <View style={styles.streakInfo}>
+              <Text style={styles.streakNumber}>{profile.longestStreak}</Text>
+              <Text style={styles.streakLabel}>Best Streak</Text>
+            </View>
+          </View>
+        </View>
 
         {editingStatus ? (
           <View style={styles.editStatusContainer}>
@@ -943,5 +965,44 @@ const styles = StyleSheet.create({
   badgeDescription: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.5)',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#15151B',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    width: '100%',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  streakCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  streakEmoji: {
+    fontSize: 28,
+  },
+  streakInfo: {
+    alignItems: 'flex-start',
+  },
+  streakNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FF3B30',
+    lineHeight: 26,
+  },
+  streakLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+  },
+  streakDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
 });

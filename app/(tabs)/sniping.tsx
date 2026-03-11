@@ -2,6 +2,7 @@ import type { Schema } from '@/amplify/data/resource';
 import { FriendRow } from '@/components/FriendRow';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { checkAndAwardBadges } from '@/utils/badge-checker';
+import { updateStreak } from '@/utils/streak-tracker';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
 import { uploadData } from 'aws-amplify/storage';
@@ -112,8 +113,16 @@ export default function SnipingScreen() {
             });
             if (errors) throw new Error('Failed to create snipe');
 
-            // Check and award badges after successful snipe
+            // Update streak and check badges after successful snipe
             if (currentUserProfile?.id) {
+                // Update streak
+                const streakResult = await updateStreak(currentUserProfile.id);
+                console.log('Streak updated:', streakResult);
+                if (streakResult.isNewRecord) {
+                    console.log('New streak record!', streakResult.longestStreak);
+                }
+
+                // Check and award badges
                 const newBadges = await checkAndAwardBadges(currentUserProfile.id);
                 if (newBadges.length > 0) {
                     console.log('Earned new badges:', newBadges);

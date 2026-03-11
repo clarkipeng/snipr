@@ -27,9 +27,10 @@ const updateSnipeScoreLambda =
   backend.updateSnipeScoreFunction.resources.lambda as any;
 const tables = backend.data.resources.tables;
 
-// Grant read/write to tables for create-snipe
+// Grant read/write to tables for create-snipe and votes
 tables["Snipe"].grantReadWriteData(snipeLambda);
 tables["Snipe"].grantReadWriteData(updateSnipeScoreLambda);
+tables["SnipeVote"].grantReadWriteData(updateSnipeScoreLambda);
 tables["Message"].grantReadWriteData(snipeLambda);
 tables["GroupMember"].grantReadData(snipeLambda);
 tables["UserProfile"].grantReadData(snipeLambda);
@@ -38,6 +39,10 @@ snipeLambda.addEnvironment("SNIPE_TABLE_NAME", tables["Snipe"].tableName);
 updateSnipeScoreLambda.addEnvironment(
   "SNIPE_TABLE_NAME",
   tables["Snipe"].tableName,
+);
+updateSnipeScoreLambda.addEnvironment(
+  "SNIPE_VOTE_TABLE_NAME",
+  tables["SnipeVote"].tableName,
 );
 snipeLambda.addEnvironment("MESSAGE_TABLE_NAME", tables["Message"].tableName);
 snipeLambda.addEnvironment(

@@ -80,6 +80,16 @@ const schema = a.schema({
       allow.authenticated().to(["read", "create"]),
     ]),
 
+  SnipeVote: a
+    .model({
+      snipeId: a.id().required(),
+      userId: a.id().required(),
+      value: a.integer().required(), // +1 for upvote, -1 for downvote
+      snipe: a.belongsTo("Snipe", "snipeId"),
+      user: a.belongsTo("UserProfile", "userId"),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
   Group: a
     .model({
       name: a.string().required(),

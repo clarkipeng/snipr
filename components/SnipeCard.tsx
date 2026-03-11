@@ -80,6 +80,7 @@ export function SnipeCard({
   const [commentCount, setCommentCount] = useState<number | null>(null);
   const [localScore, setLocalScore] = useState<number>(typeof score === 'number' ? score : 0);
   const [updatingScore, setUpdatingScore] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
 
   useEffect(() => {
     if (typeof score === 'number') {
@@ -87,8 +88,33 @@ export function SnipeCard({
     }
   }, [score]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function checkVote() {
+      if (!currentUserId) return;
+      try {
+        const { data } = await client.models.SnipeVote.list({
+          filter: {
+            snipeId: { eq: snipeId },
+            userId: { eq: currentUserId },
+          },
+          limit: 1,
+        });
+        if (!cancelled && data.length > 0) {
+          setHasVoted(true);
+        }
+      } catch (e) {
+        console.warn('Failed to check vote state:', e);
+      }
+    }
+    checkVote();
+    return () => {
+      cancelled = true;
+    };
+  }, [snipeId, currentUserId]);
+
   const changeScore = async (delta: number) => {
-    if (updatingScore) return;
+    if (updatingScore || hasVoted) return;
     const next = localScore + delta;
     setLocalScore(next);
     try {
@@ -97,8 +123,11 @@ export function SnipeCard({
         snipeId,
         delta,
       });
+      setHasVoted(true);
     } catch (e) {
       console.warn('Failed to update snipe score:', e);
+      // revert optimistic update on failure
+      setLocalScore((prev) => prev - delta);
     } finally {
       setUpdatingScore(false);
     }
@@ -219,10 +248,15 @@ export function SnipeCard({
 
         <View style={styles.voteRow}>
           <Pressable
-            style={[styles.voteButton, styles.voteButtonUp]}
+            style={[
+              styles.voteButton,
+              styles.voteButtonUp,
+              (hasVoted || updatingScore) && styles.voteButtonDisabled,
+            ]}
             onPress={() => {
               changeScore(1);
             }}
+            disabled={hasVoted || updatingScore}
           >
             <Text style={styles.voteButtonText}>▲ Upvote</Text>
           </Pressable>
@@ -234,10 +268,15 @@ export function SnipeCard({
           </View>
 
           <Pressable
-            style={[styles.voteButton, styles.voteButtonDown]}
+            style={[
+              styles.voteButton,
+              styles.voteButtonDown,
+              (hasVoted || updatingScore) && styles.voteButtonDisabled,
+            ]}
             onPress={() => {
               changeScore(-1);
             }}
+            disabled={hasVoted || updatingScore}
           >
             <Text style={styles.voteButtonText}>▼ Downvote</Text>
           </Pressable>
@@ -412,6 +451,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.9)',
+  },
+  voteButtonDisabled: {
+    opacity: 0.4,
   },
   voteScoreContainer: {
     paddingHorizontal: 6,

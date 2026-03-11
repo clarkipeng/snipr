@@ -1,7 +1,7 @@
 import type { Schema } from '@/amplify/data/resource';
 import { LinearGradient } from 'expo-linear-gradient';
 import { generateClient } from 'aws-amplify/data';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -30,6 +30,7 @@ type SnipeCardProps = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
+  score?: number | null;
   currentUserId: string | null;
   userMap: Map<string, { id: string; name: string; email?: string }>;
 };
@@ -66,6 +67,7 @@ export function SnipeCard({
   imageUrl,
   caption,
   createdAt,
+  score,
   currentUserId,
   userMap,
 }: SnipeCardProps) {
@@ -76,6 +78,60 @@ export function SnipeCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [localScore, setLocalScore] = useState<number>(typeof score === 'number' ? score : 0);
+  const [updatingScore, setUpdatingScore] = useState(false);
+  const [hasVoted, setHasVoted] = useState(false);
+
+  useEffect(() => {
+    if (typeof score === 'number') {
+      setLocalScore(score);
+    }
+  }, [score]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function checkVote() {
+      if (!currentUserId) return;
+      try {
+        const { data } = await client.models.SnipeVote.list({
+          filter: {
+            snipeId: { eq: snipeId },
+            userId: { eq: currentUserId },
+          },
+          limit: 1,
+        });
+        if (!cancelled && data.length > 0) {
+          setHasVoted(true);
+        }
+      } catch (e) {
+        console.warn('Failed to check vote state:', e);
+      }
+    }
+    checkVote();
+    return () => {
+      cancelled = true;
+    };
+  }, [snipeId, currentUserId]);
+
+  const changeScore = async (delta: number) => {
+    if (updatingScore || hasVoted) return;
+    const next = localScore + delta;
+    setLocalScore(next);
+    try {
+      setUpdatingScore(true);
+      await client.mutations.updateSnipeScore({
+        snipeId,
+        delta,
+      });
+      setHasVoted(true);
+    } catch (e) {
+      console.warn('Failed to update snipe score:', e);
+      // revert optimistic update on failure
+      setLocalScore((prev) => prev - delta);
+    } finally {
+      setUpdatingScore(false);
+    }
+  };
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -189,6 +245,42 @@ export function SnipeCard({
             <Text style={styles.caption}>{caption}</Text>
           </View>
         )}
+
+        <View style={styles.voteRow}>
+          <Pressable
+            style={[
+              styles.voteButton,
+              styles.voteButtonUp,
+              (hasVoted || updatingScore) && styles.voteButtonDisabled,
+            ]}
+            onPress={() => {
+              changeScore(1);
+            }}
+            disabled={hasVoted || updatingScore}
+          >
+            <Text style={styles.voteButtonText}>▲ Upvote</Text>
+          </Pressable>
+
+          <View style={styles.voteScoreContainer}>
+            <Text style={styles.voteScoreText}>
+              {localScore}
+            </Text>
+          </View>
+
+          <Pressable
+            style={[
+              styles.voteButton,
+              styles.voteButtonDown,
+              (hasVoted || updatingScore) && styles.voteButtonDisabled,
+            ]}
+            onPress={() => {
+              changeScore(-1);
+            }}
+            disabled={hasVoted || updatingScore}
+          >
+            <Text style={styles.voteButtonText}>▼ Downvote</Text>
+          </Pressable>
+        </View>
       </Pressable>
 
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
@@ -332,6 +424,44 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: 14,
     lineHeight: 20,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  voteButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  voteButtonUp: {
+    backgroundColor: 'rgba(76, 217, 100, 0.16)',
+  },
+  voteButtonDown: {
+    backgroundColor: 'rgba(255, 59, 48, 0.16)',
+  },
+  voteButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  voteButtonDisabled: {
+    opacity: 0.4,
+  },
+  voteScoreContainer: {
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  voteScoreText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: 'rgba(255,255,255,0.8)',
   },
   commentToggle: {

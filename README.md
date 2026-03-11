@@ -14,17 +14,17 @@ A gamified social photography app where users "snipe" friends by taking photos o
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Mobile Framework | React Native + Expo |
-| Language | TypeScript |
-| Navigation | Expo Router (file-based) |
-| Authentication | AWS Cognito |
-| API | AWS AppSync (GraphQL) |
-| Database | AWS DynamoDB |
-| Server-Side Logic | AWS Lambda (Node.js) |
-| File Storage | AWS S3 |
-| Infrastructure | AWS Amplify Gen 2 + CDK |
+| Layer             | Technology               |
+| ----------------- | ------------------------ |
+| Mobile Framework  | React Native + Expo      |
+| Language          | TypeScript               |
+| Navigation        | Expo Router (file-based) |
+| Authentication    | AWS Cognito              |
+| API               | AWS AppSync (GraphQL)    |
+| Database          | AWS DynamoDB             |
+| Server-Side Logic | AWS Lambda (Node.js)     |
+| File Storage      | AWS S3                   |
+| Infrastructure    | AWS Amplify Gen 2 + CDK  |
 
 ## Architecture
 
@@ -50,7 +50,6 @@ The leaderboard's domination scoring (ranking users and detecting 3+ consecutive
    ```
 
 2. Create an IAM user in the [AWS Console](https://console.aws.amazon.com/iam/):
-
    - Go to **Users** > **Create user**
    - Name it (e.g. `snipr-dev`)
    - **Attach policies directly** > check **`AdministratorAccess`**
@@ -100,6 +99,24 @@ The leaderboard's domination scoring (ranking users and detecting 3+ consecutive
    - Press `w` for web
    - Scan QR code with the Expo Go app on your phone
 
+### Push notifications: use `npx expo run:ios` (not `npx expo start`)
+
+Push notifications (e.g. “you were sniped”) **do not work** when you use `npx expo start` and open the app in **Expo Go** or the iOS Simulator. You need a **development build** on a **physical iPhone**:
+
+- **`npx expo start`** starts the Metro bundler; you then run the app inside Expo Go (or press `i` for the simulator). Expo Go is a pre-built app with a fixed set of native modules—it does not include the native code required for push notifications (or for AWS Amplify auth). The iOS Simulator also cannot receive push notifications.
+- **`npx expo run:ios`** builds and runs your own native app that includes all your project’s native dependencies. Auth and push work there. Use a **physical device** for push (simulator cannot receive pushes).
+
+One-time setup, then run on your iPhone:
+
+```bash
+npx expo install expo-dev-client
+npx expo prebuild
+npx expo run:ios --device
+```
+
+Pick your iPhone when prompted. After the app is on your phone, sign in and allow notifications; the app will register your push token and you’ll receive snipes and other pushes.
+w
+
 ## For Graders / Teammates (no AWS setup needed)
 
 If a sandbox is already running, you only need:
@@ -113,5 +130,6 @@ You will connect to the shared backend automatically.
 ## Notes
 
 - `amplify_outputs.json` is gitignored — get it from a teammate or generate your own via the sandbox.
+- **Why does `amplify_outputs.json` keep changing?** When you run `npm run amplify:sandbox`, it runs in **watch mode**: it watches the `amplify/` folder and redeploys on any file change. Each deploy regenerates `amplify_outputs.json`. So editing anything under `amplify/` (or the sandbox syncing) will overwrite that file. To deploy once without watching (so the file isn’t overwritten again), use `npm run amplify:sandbox:once`.
 - The sandbox owner must keep `npm run amplify:sandbox` running for schema changes to auto-deploy.
 - Do **not** commit `.env` or `~/.aws/credentials`.

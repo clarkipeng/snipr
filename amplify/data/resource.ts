@@ -55,6 +55,7 @@ const schema = a.schema({
       targetId: a.id().required(),
       imageKey: a.string().required(),
       caption: a.string(),
+      score: a.integer(), // net score = upvotes - downvotes
       sniper: a.belongsTo("UserProfile", "sniperId"),
       target: a.belongsTo("UserProfile", "targetId"),
       messages: a.hasMany("Message", "snipeId"),

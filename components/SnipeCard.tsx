@@ -30,6 +30,7 @@ type SnipeCardProps = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
+  score?: number | null;
   currentUserId: string | null;
   userMap: Map<string, { id: string; name: string; email?: string }>;
 };
@@ -66,6 +67,7 @@ export function SnipeCard({
   imageUrl,
   caption,
   createdAt,
+  score,
   currentUserId,
   userMap,
 }: SnipeCardProps) {
@@ -201,8 +203,9 @@ export function SnipeCard({
           </Pressable>
 
           <View style={styles.voteScoreContainer}>
-            {/* Placeholder: will become (upvotes - downvotes) */}
-            <Text style={styles.voteScoreText}>0</Text>
+            <Text style={styles.voteScoreText}>
+              {typeof score === 'number' ? score : 0}
+            </Text>
           </View>
 
           <Pressable

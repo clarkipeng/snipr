@@ -539,6 +539,7 @@ export default function GroupsScreen() {
                         imageUrl={item.snipeData.imageUrl}
                         caption={item.snipeData.caption}
                         createdAt={item.createdAt}
+                        score={item.snipeData.score}
                         currentUserId={currentUserId}
                         userMap={groupUserMap}
                       />

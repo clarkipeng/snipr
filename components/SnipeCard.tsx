@@ -1,7 +1,7 @@
 import type { Schema } from '@/amplify/data/resource';
 import { LinearGradient } from 'expo-linear-gradient';
 import { generateClient } from 'aws-amplify/data';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -78,6 +78,13 @@ export function SnipeCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [localScore, setLocalScore] = useState<number>(typeof score === 'number' ? score : 0);
+
+  useEffect(() => {
+    if (typeof score === 'number') {
+      setLocalScore(score);
+    }
+  }, [score]);
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -196,7 +203,7 @@ export function SnipeCard({
           <Pressable
             style={[styles.voteButton, styles.voteButtonUp]}
             onPress={() => {
-              // TODO: wire up upvote mutation
+              setLocalScore((prev) => prev + 1);
             }}
           >
             <Text style={styles.voteButtonText}>▲ Upvote</Text>
@@ -204,14 +211,14 @@ export function SnipeCard({
 
           <View style={styles.voteScoreContainer}>
             <Text style={styles.voteScoreText}>
-              {typeof score === 'number' ? score : 0}
+              {localScore}
             </Text>
           </View>
 
           <Pressable
             style={[styles.voteButton, styles.voteButtonDown]}
             onPress={() => {
-              // TODO: wire up downvote mutation
+              setLocalScore((prev) => prev - 1);
             }}
           >
             <Text style={styles.voteButtonText}>▼ Downvote</Text>

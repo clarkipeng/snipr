@@ -14,17 +14,17 @@ A gamified social photography app where users "snipe" friends by taking photos o
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Mobile Framework | React Native + Expo |
-| Language | TypeScript |
-| Navigation | Expo Router (file-based) |
-| Authentication | AWS Cognito |
-| API | AWS AppSync (GraphQL) |
-| Database | AWS DynamoDB |
-| Server-Side Logic | AWS Lambda (Node.js) |
-| File Storage | AWS S3 |
-| Infrastructure | AWS Amplify Gen 2 + CDK |
+| Layer             | Technology               |
+| ----------------- | ------------------------ |
+| Mobile Framework  | React Native + Expo      |
+| Language          | TypeScript               |
+| Navigation        | Expo Router (file-based) |
+| Authentication    | AWS Cognito              |
+| API               | AWS AppSync (GraphQL)    |
+| Database          | AWS DynamoDB             |
+| Server-Side Logic | AWS Lambda (Node.js)     |
+| File Storage      | AWS S3                   |
+| Infrastructure    | AWS Amplify Gen 2 + CDK  |
 
 ## Architecture
 
@@ -50,7 +50,6 @@ The leaderboard's domination scoring (ranking users and detecting 3+ consecutive
    ```
 
 2. Create an IAM user in the [AWS Console](https://console.aws.amazon.com/iam/):
-
    - Go to **Users** > **Create user**
    - Name it (e.g. `snipr-dev`)
    - **Attach policies directly** > check **`AdministratorAccess`**
@@ -116,6 +115,7 @@ npx expo run:ios --device
 ```
 
 Pick your iPhone when prompted. After the app is on your phone, sign in and allow notifications; the app will register your push token and you’ll receive snipes and other pushes.
+w
 
 ## For Graders / Teammates (no AWS setup needed)
 

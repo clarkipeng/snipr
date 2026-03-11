@@ -5,15 +5,9 @@
     "user_pool_client_id": "1dm49dnctcsm3c6trd90jsth22",
     "identity_pool_id": "us-west-2:5214a37f-7fc4-4de8-b465-cf37338bb724",
     "mfa_methods": [],
-    "standard_required_attributes": [
-      "email"
-    ],
-    "username_attributes": [
-      "email"
-    ],
-    "user_verification_types": [
-      "email"
-    ],
+    "standard_required_attributes": ["email"],
+    "username_attributes": ["email"],
+    "user_verification_types": ["email"],
     "groups": [],
     "mfa_configuration": "NONE",
     "password_policy": {
@@ -29,9 +23,7 @@
     "url": "https://gxvbqmt6l5dqtowewxswxeypzu.appsync-api.us-west-2.amazonaws.com/graphql",
     "aws_region": "us-west-2",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
-    "authorization_types": [
-      "AWS_IAM"
-    ],
+    "authorization_types": ["AWS_IAM"],
     "model_introspection": {
       "version": 1,
       "models": {
@@ -84,9 +76,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "userId"
-                ]
+                "associatedWith": ["userId"]
               }
             },
             "friendOf": {
@@ -100,9 +90,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "friendId"
-                ]
+                "associatedWith": ["friendId"]
               }
             },
             "sentRequests": {
@@ -116,9 +104,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "senderId"
-                ]
+                "associatedWith": ["senderId"]
               }
             },
             "receivedRequests": {
@@ -132,9 +118,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "receiverId"
-                ]
+                "associatedWith": ["receiverId"]
               }
             },
             "snipesMade": {
@@ -148,9 +132,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "sniperId"
-                ]
+                "associatedWith": ["sniperId"]
               }
             },
             "snipesReceived": {
@@ -164,9 +146,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "targetId"
-                ]
+                "associatedWith": ["targetId"]
               }
             },
             "groupMemberships": {
@@ -180,9 +160,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "userId"
-                ]
+                "associatedWith": ["userId"]
               }
             },
             "messages": {
@@ -196,9 +174,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "senderId"
-                ]
+                "associatedWith": ["senderId"]
               }
             },
             "snipeComments": {
@@ -212,9 +188,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "userId"
-                ]
+                "associatedWith": ["userId"]
               }
             },
             "createdAt": {
@@ -250,18 +224,11 @@
                     "ownerField": "owner",
                     "allow": "owner",
                     "identityClaim": "cognito:username",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   },
                   {
                     "allow": "private",
-                    "operations": [
-                      "read"
-                    ]
+                    "operations": ["read"]
                   }
                 ]
               }
@@ -307,9 +274,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "userId"
-                ]
+                "targetNames": ["userId"]
               }
             },
             "friend": {
@@ -322,9 +287,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "friendId"
-                ]
+                "targetNames": ["friendId"]
               }
             },
             "createdAt": {
@@ -357,12 +320,7 @@
                 "rules": [
                   {
                     "allow": "private",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   }
                 ]
               }
@@ -408,9 +366,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "senderId"
-                ]
+                "targetNames": ["senderId"]
               }
             },
             "receiver": {
@@ -423,9 +379,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "receiverId"
-                ]
+                "targetNames": ["receiverId"]
               }
             },
             "createdAt": {
@@ -458,12 +412,7 @@
                 "rules": [
                   {
                     "allow": "private",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   }
                 ]
               }
@@ -530,9 +479,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "sniperId"
-                ]
+                "targetNames": ["sniperId"]
               }
             },
             "target": {
@@ -545,9 +492,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "targetId"
-                ]
+                "targetNames": ["targetId"]
               }
             },
             "messages": {
@@ -561,9 +506,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "snipeId"
-                ]
+                "associatedWith": ["snipeId"]
               }
             },
             "comments": {
@@ -577,9 +520,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "snipeId"
-                ]
+                "associatedWith": ["snipeId"]
               }
             },
             "createdAt": {
@@ -615,18 +556,11 @@
                     "ownerField": "owner",
                     "allow": "owner",
                     "identityClaim": "cognito:username",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   },
                   {
                     "allow": "private",
-                    "operations": [
-                      "read"
-                    ]
+                    "operations": ["read"]
                   }
                 ]
               }
@@ -679,9 +613,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "snipeId"
-                ]
+                "targetNames": ["snipeId"]
               }
             },
             "user": {
@@ -694,9 +626,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "userId"
-                ]
+                "targetNames": ["userId"]
               }
             },
             "createdAt": {
@@ -732,19 +662,11 @@
                     "ownerField": "owner",
                     "allow": "owner",
                     "identityClaim": "cognito:username",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   },
                   {
                     "allow": "private",
-                    "operations": [
-                      "read",
-                      "create"
-                    ]
+                    "operations": ["read", "create"]
                   }
                 ]
               }
@@ -798,9 +720,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "groupId"
-                ]
+                "associatedWith": ["groupId"]
               }
             },
             "messages": {
@@ -814,9 +734,7 @@
               "isArrayNullable": true,
               "association": {
                 "connectionType": "HAS_MANY",
-                "associatedWith": [
-                  "groupId"
-                ]
+                "associatedWith": ["groupId"]
               }
             },
             "createdAt": {
@@ -849,12 +767,7 @@
                 "rules": [
                   {
                     "allow": "private",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   }
                 ]
               }
@@ -900,9 +813,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "groupId"
-                ]
+                "targetNames": ["groupId"]
               }
             },
             "user": {
@@ -915,9 +826,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "userId"
-                ]
+                "targetNames": ["userId"]
               }
             },
             "createdAt": {
@@ -950,12 +859,7 @@
                 "rules": [
                   {
                     "allow": "private",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   }
                 ]
               }
@@ -1022,9 +926,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "groupId"
-                ]
+                "targetNames": ["groupId"]
               }
             },
             "sender": {
@@ -1037,9 +939,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "senderId"
-                ]
+                "targetNames": ["senderId"]
               }
             },
             "snipe": {
@@ -1052,9 +952,7 @@
               "attributes": [],
               "association": {
                 "connectionType": "BELONGS_TO",
-                "targetNames": [
-                  "snipeId"
-                ]
+                "targetNames": ["snipeId"]
               }
             },
             "createdAt": {
@@ -1087,12 +985,7 @@
                 "rules": [
                   {
                     "allow": "private",
-                    "operations": [
-                      "create",
-                      "update",
-                      "delete",
-                      "read"
-                    ]
+                    "operations": ["create", "update", "delete", "read"]
                   }
                 ]
               }
@@ -1252,34 +1145,15 @@
         "aws_region": "us-west-2",
         "paths": {
           "snipes/*": {
-            "authenticated": [
-              "get",
-              "list",
-              "write",
-              "delete"
-            ],
-            "guest": [
-              "get",
-              "list"
-            ]
+            "authenticated": ["get", "list", "write", "delete"],
+            "guest": ["get", "list"]
           },
           "public/profiles/${cognito-identity.amazonaws.com:sub}/*": {
-            "entityidentity": [
-              "get",
-              "list",
-              "write",
-              "delete"
-            ]
+            "entityidentity": ["get", "list", "write", "delete"]
           },
           "public/profiles/*": {
-            "guest": [
-              "get",
-              "list"
-            ],
-            "authenticated": [
-              "get",
-              "list"
-            ]
+            "guest": ["get", "list"],
+            "authenticated": ["get", "list"]
           }
         }
       }

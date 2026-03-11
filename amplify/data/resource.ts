@@ -26,6 +26,7 @@ const schema = a.schema({
       groupMemberships: a.hasMany("GroupMember", "userId"),
       messages: a.hasMany("Message", "senderId"),
       snipeComments: a.hasMany("SnipeComment", "userId"),
+      snipeVotes: a.hasMany("SnipeVote", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -61,6 +62,7 @@ const schema = a.schema({
       target: a.belongsTo("UserProfile", "targetId"),
       messages: a.hasMany("Message", "snipeId"),
       comments: a.hasMany("SnipeComment", "snipeId"),
+      votes: a.hasMany("SnipeVote", "snipeId"),
     })
     .authorization((allow) => [
       allow.owner(),

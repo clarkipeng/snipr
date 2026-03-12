@@ -1,9 +1,9 @@
 {
   "auth": {
-    "user_pool_id": "us-west-2_PTNyrcJzA",
+    "user_pool_id": "us-west-2_HEn5kfJU9",
     "aws_region": "us-west-2",
-    "user_pool_client_id": "1dm49dnctcsm3c6trd90jsth22",
-    "identity_pool_id": "us-west-2:5214a37f-7fc4-4de8-b465-cf37338bb724",
+    "user_pool_client_id": "ts76icjg05dlvgu1tqkb2e7v1",
+    "identity_pool_id": "us-west-2:4b622ffd-f26a-4f4d-bfd1-caaa92c1dacb",
     "mfa_methods": [],
     "standard_required_attributes": [
       "email"
@@ -26,7 +26,7 @@
     "unauthenticated_identities_enabled": true
   },
   "data": {
-    "url": "https://gxvbqmt6l5dqtowewxswxeypzu.appsync-api.us-west-2.amazonaws.com/graphql",
+    "url": "https://5sjd4mnjfrerthpq5ly6omgfga.appsync-api.us-west-2.amazonaws.com/graphql",
     "aws_region": "us-west-2",
     "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
     "authorization_types": [
@@ -1694,11 +1694,11 @@
   },
   "storage": {
     "aws_region": "us-west-2",
-    "bucket_name": "amplify-snipr-shaungao-sa-sniprstoragebucket75ada2-rb7pqc4nxlb4",
+    "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
     "buckets": [
       {
         "name": "sniprStorage",
-        "bucket_name": "amplify-snipr-shaungao-sa-sniprstoragebucket75ada2-rb7pqc4nxlb4",
+        "bucket_name": "amplify-snipr-nular-sandb-sniprstoragebucket75ada2-zljxpxdh0bnw",
         "aws_region": "us-west-2",
         "paths": {
           "snipes/*": {

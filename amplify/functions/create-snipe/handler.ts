@@ -135,9 +135,13 @@ export const handler = async (event: any) => {
       ) {
         await fetch("https://exp.host/--/api/v2/push/send", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
           body: JSON.stringify({
             to: expoPushToken,
+            sound: "default",
             title: "You got sniped!",
             body: caption?.trim()
               ? `${sniperName}: ${caption}`

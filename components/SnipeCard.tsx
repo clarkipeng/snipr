@@ -2,11 +2,7 @@ import type { Schema } from "@/amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Schema } from '@/amplify/data/resource';
-import { getCachedUrl } from '@/utils/url-cache';
-import { LinearGradient } from 'expo-linear-gradient';
-import { generateClient } from 'aws-amplify/data';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { getCachedUrl } from "@/utils/url-cache";
 import {
   ActivityIndicator,
   Animated,
@@ -17,9 +13,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-} from 'react-native';
-import { ReactionPicker } from './ReactionPicker';
-import { ReactionBar } from './ReactionBar';
+import { ReactionPicker } from "./ReactionPicker";
+import { ReactionBar } from "./ReactionBar";
 
 const client = generateClient<Schema>();
 
@@ -48,11 +43,14 @@ type SnipeCardProps = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
+  score?: number | null;
   currentUserId: string | null;
-  userMap: Map<string, { id: string; name: string; email?: string }>;
+  userMap: Map<
+    string,
+    { id: string; name: string; email?: string; profilePicture?: string | null }
+  >;
   initialHasVoted?: boolean;
   onScoreChange?: (snipeId: string, newScore: number) => void;
-  userMap: Map<string, { id: string; name: string; email?: string; profilePicture?: string | null }>;
 };
 
 function formatTime(dateStr: string) {
@@ -89,6 +87,7 @@ export function SnipeCard({
   imageUrl,
   caption,
   createdAt,
+  score,
   currentUserId,
   userMap,
   initialHasVoted,
@@ -233,23 +232,24 @@ export function SnipeCard({
         },
       ).catch(() => {});
       // #endregion
-      const mapped: Comment[] = await Promise.all(sorted.map(async (c) => {
-        const u = userMap.get(c.userId);
-        const displayName = u?.name || u?.email?.split("@")[0] || "Unknown";
-        const displayName = u?.name || u?.email?.split('@')[0] || 'Unknown';
-        const profilePicPath = u?.profilePicture;
-        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
-        return {
-          id: c.id,
-          content: c.content,
-          userName: displayName,
-          createdAt: c.createdAt,
-        };
-      });
-          userProfilePicture: profilePicUrl,
-          createdAt: c.createdAt
-        };
-      }));
+      const mapped: Comment[] = await Promise.all(
+        sorted.map(async (c) => {
+          const u = userMap.get(c.userId);
+          const displayName =
+            u?.name || u?.email?.split("@")[0] || "Unknown";
+          const profilePicPath = u?.profilePicture;
+          const profilePicUrl = profilePicPath
+            ? await getCachedUrl(profilePicPath)
+            : null;
+          return {
+            id: c.id,
+            content: c.content,
+            userName: displayName,
+            userProfilePicture: profilePicUrl,
+            createdAt: c.createdAt,
+          };
+        }),
+      );
       setComments(mapped);
       setCommentCount(mapped.length);
     } catch (err) {
@@ -279,16 +279,17 @@ export function SnipeCard({
       if (newComment) {
         const currentUser = userMap.get(currentUserId);
         const profilePicPath = currentUser?.profilePicture;
-        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+        const profilePicUrl = profilePicPath
+          ? await getCachedUrl(profilePicPath)
+          : null;
 
         const entry: Comment = {
           id: newComment.id,
           content: newComment.content,
           userName:
-            userMap.get(currentUserId)?.name ||
-            userMap.get(currentUserId)?.email?.split("@")[0] ||
+            currentUser?.name ||
+            currentUser?.email?.split("@")[0] ||
             "You",
-          userName: currentUser?.name || currentUser?.email?.split('@')[0] || 'You',
           userProfilePicture: profilePicUrl,
           createdAt: newComment.createdAt,
         };
@@ -404,9 +405,7 @@ export function SnipeCard({
   };
 
   return (
-    <Animated.View
-      style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}
-    >
+    <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
       <Pressable
         style={styles.card}
         onPressIn={onPressIn}
@@ -443,7 +442,6 @@ export function SnipeCard({
             <Text style={styles.caption}>{caption}</Text>
           </View>
         )}
-      </Pressable>
 
         <View style={styles.voteRow}>
           <Pressable
@@ -520,18 +518,18 @@ export function SnipeCard({
           ) : (
             comments.map((c) => (
               <View key={c.id} style={styles.commentRow}>
-                <Text style={styles.commentText}>
-                  <Text style={styles.commentAuthor}>{c.userName}</Text>
-                  {"  "}
-                  {c.content}
-                </Text>
-                <Text style={styles.commentTime}>
-                  {formatTime(c.createdAt)}
-                </Text>
                 {c.userProfilePicture ? (
-                  <Image source={{ uri: c.userProfilePicture }} style={styles.commentAvatar} />
+                  <Image
+                    source={{ uri: c.userProfilePicture }}
+                    style={styles.commentAvatar}
+                  />
                 ) : (
-                  <View style={[styles.commentAvatar, styles.commentAvatarPlaceholder]}>
+                  <View
+                    style={[
+                      styles.commentAvatar,
+                      styles.commentAvatarPlaceholder,
+                    ]}
+                  >
                     <Text style={styles.commentAvatarInitial}>
                       {c.userName.charAt(0).toUpperCase()}
                     </Text>
@@ -540,10 +538,12 @@ export function SnipeCard({
                 <View style={styles.commentContent}>
                   <Text style={styles.commentText}>
                     <Text style={styles.commentAuthor}>{c.userName}</Text>
-                    {'  '}
+                    {"  "}
                     {c.content}
                   </Text>
-                  <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                  <Text style={styles.commentTime}>
+                    {formatTime(c.createdAt)}
+                  </Text>
                 </View>
               </View>
             ))
@@ -731,9 +731,7 @@ const styles = StyleSheet.create({
   },
   commentRow: {
     flexDirection: "row",
-    alignItems: "baseline",
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     paddingVertical: 6,
     gap: 10,
   },
@@ -770,7 +768,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "rgba(255,255,255,0.3)",
     flexShrink: 0,
-    color: 'rgba(255,255,255,0.3)',
   },
   commentInputRow: {
     flexDirection: "row",

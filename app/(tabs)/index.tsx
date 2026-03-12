@@ -1,30 +1,21 @@
 import type { Schema } from "@/amplify/data/resource";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { SnipeCard } from "@/components/SnipeCard";
+import { checkAndAwardBadges } from "@/utils/badge-checker";
 import { getCachedUrl } from "@/utils/url-cache";
 import { useFocusEffect } from "@react-navigation/native";
 import { fetchUserAttributes } from "aws-amplify/auth";
 import { generateClient } from "aws-amplify/data";
 import { useCallback, useMemo, useState } from "react";
 import {
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import type { Schema } from '@/amplify/data/resource';
-import { SkeletonCard } from '@/components/SkeletonCard';
-import { SnipeCard } from '@/components/SnipeCard';
-import { checkAndAwardBadges } from '@/utils/badge-checker';
-import { getCachedUrl } from '@/utils/url-cache';
-import { useFocusEffect } from '@react-navigation/native';
-import { fetchUserAttributes } from 'aws-amplify/auth';
-import { generateClient } from 'aws-amplify/data';
-import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 const client = generateClient<Schema>();
 
@@ -118,12 +109,15 @@ export default function HomeScreen() {
         new Map(
           allUsers.map((u) => [
             u.id,
-            { id: u.id, name: u.name, email: u.email },
+            {
+              id: u.id,
+              name: u.name,
+              email: u.email,
+              profilePicture: (u as any).profilePicture ?? null,
+            },
           ]),
         ),
       );
-      const uMap = new Map(allUsers.map(u => [u.id, u]));
-      setUserMap(new Map(allUsers.map(u => [u.id, { id: u.id, name: u.name, email: u.email, profilePicture: u.profilePicture }])));
       setCurrentUserId(currentUser?.id ?? null);
 
       // Rule: You must be friends with BOTH the sniper AND the target (or be one of them)

@@ -5,8 +5,16 @@ import { getCachedUrl } from '@/utils/url-cache';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
-import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const client = generateClient<Schema>();
 
@@ -30,6 +38,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userMap, setUserMap] = useState<Map<string, UserEntry>>(new Map());
+  const [dateFilter, setDateFilter] = useState<'all' | '1h' | '24h' | '7d' | '30d'>('all');
+  const [friendSearch, setFriendSearch] = useState('');
 
   async function loadFeed() {
     try {
@@ -65,9 +75,9 @@ export default function HomeScreen() {
       const isAllowed = (id: string | null) => id === currentUserId || (id && friendIds.has(id));
       const filtered = snipes.filter(s => isAllowed(s.sniperId) && isAllowed(s.targetId));
 
-      const sorted = [...filtered]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 30);
+      const sorted = [...filtered].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
 
       const items: FeedItem[] = await Promise.all(
         sorted.map(async (snipe) => {
@@ -108,6 +118,30 @@ export default function HomeScreen() {
     }, [])
   );
 
+  const filteredFeed = useMemo(() => {
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const oneHour = 60 * 60 * 1000;
+    const dateCutoff =
+      dateFilter === '1h'
+        ? now - oneHour
+        : dateFilter === '24h'
+          ? now - oneDay
+          : dateFilter === '7d'
+            ? now - 7 * oneDay
+            : dateFilter === '30d'
+              ? now - 30 * oneDay
+              : 0;
+
+    const q = friendSearch.trim().toLowerCase();
+    return feed.filter((item) => {
+      if (dateCutoff > 0 && new Date(item.createdAt).getTime() < dateCutoff) return false;
+      if (q && !item.sniperName.toLowerCase().includes(q) && !item.targetName.toLowerCase().includes(q))
+        return false;
+      return true;
+    });
+  }, [feed, dateFilter, friendSearch]);
+
   function onRefresh() {
     setRefreshing(true);
     loadFeed();
@@ -132,8 +166,32 @@ export default function HomeScreen() {
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}
+
+      <View style={styles.filterRow}>
+        <View style={styles.dateFilterRow}>
+          {(['all', '1h', '24h', '7d', '30d'] as const).map((key) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => setDateFilter(key)}
+              style={[styles.dateChip, dateFilter === key && styles.dateChipActive]}
+            >
+              <Text style={[styles.dateChipText, dateFilter === key && styles.dateChipTextActive]}>
+                {key === 'all' ? 'All' : key === '1h' ? '1h' : key === '24h' ? '24h' : key === '7d' ? '7 days' : '30 days'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by friend..."
+          placeholderTextColor="rgba(255,255,255,0.4)"
+          value={friendSearch}
+          onChangeText={setFriendSearch}
+        />
+      </View>
+
       <FlatList
-        data={feed}
+        data={filteredFeed}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <SnipeCard
@@ -160,8 +218,12 @@ export default function HomeScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Nothing here yet</Text>
-            <Text style={styles.emptySubtitle}>Add friends and start sniping!</Text>
+            <Text style={styles.emptyTitle}>
+              {feed.length === 0 ? 'Nothing here yet' : 'No snipes match your filters'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {feed.length === 0 ? 'Add friends and start sniping!' : 'Try a different date or search.'}
+            </Text>
           </View>
         }
       />
@@ -181,6 +243,40 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: 2,
+    color: '#fff',
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  dateFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  dateChipActive: {
+    backgroundColor: '#FF3B30',
+  },
+  dateChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  dateChipTextActive: {
+    color: '#fff',
+  },
+  searchInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
     color: '#fff',
   },
   listContent: {

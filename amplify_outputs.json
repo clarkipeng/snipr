@@ -217,6 +217,22 @@
                 ]
               }
             },
+            "snipeVotes": {
+              "name": "snipeVotes",
+              "isArray": true,
+              "type": {
+                "model": "SnipeVote"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true,
+              "association": {
+                "connectionType": "HAS_MANY",
+                "associatedWith": [
+                  "userId"
+                ]
+              }
+            },
             "createdAt": {
               "name": "createdAt",
               "isArray": false,
@@ -582,6 +598,22 @@
                 ]
               }
             },
+            "votes": {
+              "name": "votes",
+              "isArray": true,
+              "type": {
+                "model": "SnipeVote"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "isArrayNullable": true,
+              "association": {
+                "connectionType": "HAS_MANY",
+                "associatedWith": [
+                  "snipeId"
+                ]
+              }
+            },
             "createdAt": {
               "name": "createdAt",
               "isArray": false,
@@ -744,6 +776,114 @@
                     "operations": [
                       "read",
                       "create"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "primaryKeyInfo": {
+            "isCustomPrimaryKey": false,
+            "primaryKeyFieldName": "id",
+            "sortKeyFieldNames": []
+          }
+        },
+        "SnipeVote": {
+          "name": "SnipeVote",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "snipeId": {
+              "name": "snipeId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "userId": {
+              "name": "userId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "value": {
+              "name": "value",
+              "isArray": false,
+              "type": "Int",
+              "isRequired": true,
+              "attributes": []
+            },
+            "snipe": {
+              "name": "snipe",
+              "isArray": false,
+              "type": {
+                "model": "Snipe"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "association": {
+                "connectionType": "BELONGS_TO",
+                "targetNames": [
+                  "snipeId"
+                ]
+              }
+            },
+            "user": {
+              "name": "user",
+              "isArray": false,
+              "type": {
+                "model": "UserProfile"
+              },
+              "isRequired": false,
+              "attributes": [],
+              "association": {
+                "connectionType": "BELONGS_TO",
+                "targetNames": [
+                  "userId"
+                ]
+              }
+            },
+            "createdAt": {
+              "name": "createdAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            },
+            "updatedAt": {
+              "name": "updatedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            }
+          },
+          "syncable": true,
+          "pluralName": "SnipeVotes",
+          "attributes": [
+            {
+              "type": "model",
+              "properties": {}
+            },
+            {
+              "type": "auth",
+              "properties": {
+                "rules": [
+                  {
+                    "allow": "private",
+                    "operations": [
+                      "create",
+                      "update",
+                      "delete",
+                      "read"
                     ]
                   }
                 ]
@@ -1236,6 +1376,12 @@
               "isArray": false,
               "type": "Int",
               "isRequired": true
+            },
+            "userProfileId": {
+              "name": "userProfileId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": false
             }
           }
         }

@@ -1,3 +1,7 @@
+import type { Schema } from "@/amplify/data/resource";
+import { generateClient } from "aws-amplify/data";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Schema } from '@/amplify/data/resource';
 import { getCachedUrl } from '@/utils/url-cache';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +16,7 @@ import {
   Text,
   TextInput,
   View,
+} from "react-native";
 } from 'react-native';
 import { ReactionPicker } from './ReactionPicker';
 import { ReactionBar } from './ReactionBar';
@@ -35,6 +40,8 @@ type Reaction = {
 
 type SnipeCardProps = {
   snipeId: string;
+  sniperId?: string;
+  targetId?: string;
   sniperName: string;
   targetName: string;
   sniperProfilePictureUrl: string | null;
@@ -42,13 +49,16 @@ type SnipeCardProps = {
   caption: string | null;
   createdAt: string;
   currentUserId: string | null;
+  userMap: Map<string, { id: string; name: string; email?: string }>;
+  initialHasVoted?: boolean;
+  onScoreChange?: (snipeId: string, newScore: number) => void;
   userMap: Map<string, { id: string; name: string; email?: string; profilePicture?: string | null }>;
 };
 
 function formatTime(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -71,6 +81,8 @@ function SniperAvatar({ url, name }: { url: string | null; name: string }) {
 
 export function SnipeCard({
   snipeId,
+  sniperId,
+  targetId,
   sniperName,
   targetName,
   sniperProfilePictureUrl,
@@ -79,14 +91,90 @@ export function SnipeCard({
   createdAt,
   currentUserId,
   userMap,
+  initialHasVoted,
+  onScoreChange,
 }: SnipeCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [expanded, setExpanded] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [commentText, setCommentText] = useState('');
+  const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [localScore, setLocalScore] = useState<number>(
+    typeof score === "number" ? score : 0,
+  );
+  const [updatingScore, setUpdatingScore] = useState(false);
+  const [hasVoted, setHasVoted] = useState<boolean>(Boolean(initialHasVoted));
+
+  useEffect(() => {
+    if (typeof score === "number") {
+      setLocalScore(score);
+    }
+  }, [score]);
+
+  // Ensure vote state is persisted by checking the SnipeVote table on mount.
+  useEffect(() => {
+    let cancelled = false;
+    async function checkVote() {
+      if (!currentUserId) return;
+      try {
+        const { data } = await client.models.SnipeVote.list({
+          filter: {
+            snipeId: { eq: snipeId },
+            userId: { eq: currentUserId },
+          },
+          limit: 1,
+        });
+        if (!cancelled && data.length > 0) {
+          setHasVoted(true);
+        }
+      } catch (e) {
+        console.warn("Failed to check vote state:", e);
+      }
+    }
+    checkVote();
+    return () => {
+      cancelled = true;
+    };
+  }, [snipeId, currentUserId]);
+
+  const isAssociatedWithSnipe =
+    currentUserId != null &&
+    (currentUserId === sniperId || currentUserId === targetId);
+
+  const canVote =
+    Boolean(currentUserId) && !hasVoted && !updatingScore && !isAssociatedWithSnipe;
+
+  const changeScore = async (delta: number) => {
+    if (!canVote) return;
+    const next = localScore + delta;
+    setLocalScore(next);
+    try {
+      setUpdatingScore(true);
+      await client.mutations.updateSnipeScore({
+        snipeId,
+        delta,
+        userProfileId: currentUserId ?? undefined,
+      });
+      setHasVoted(true);
+      onScoreChange?.(snipeId, next);
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      const alreadyVoted =
+        typeof msg === "string" && msg.includes("already voted");
+      if (alreadyVoted) {
+        setHasVoted(true);
+        onScoreChange?.(snipeId, next);
+        // leave localScore as-is; backend already has the vote
+      } else {
+        console.warn("Failed to update snipe score:", e);
+        setLocalScore((prev) => prev - delta);
+      }
+    } finally {
+      setUpdatingScore(false);
+    }
+  };
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [loadingReactions, setLoadingReactions] = useState(false);
@@ -115,13 +203,39 @@ export function SnipeCard({
         limit: 50,
       });
       const sorted = [...data].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
       // #region agent log
-      fetch('http://127.0.0.1:7897/ingest/0e95db31-a5bc-4ad5-9951-34c58685161d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'57a908'},body:JSON.stringify({sessionId:'57a908',location:'SnipeCard.tsx:loadComments',message:'comment data and userMap',data:{comments:sorted.map((c:any)=>({id:c.id,userId:c.userId,content:c.content})),userMapKeys:[...userMap.keys()],userMapSize:userMap.size},timestamp:Date.now()})}).catch(()=>{});
+      fetch(
+        "http://127.0.0.1:7897/ingest/0e95db31-a5bc-4ad5-9951-34c58685161d",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "57a908",
+          },
+          body: JSON.stringify({
+            sessionId: "57a908",
+            location: "SnipeCard.tsx:loadComments",
+            message: "comment data and userMap",
+            data: {
+              comments: sorted.map((c: any) => ({
+                id: c.id,
+                userId: c.userId,
+                content: c.content,
+              })),
+              userMapKeys: [...userMap.keys()],
+              userMapSize: userMap.size,
+            },
+            timestamp: Date.now(),
+          }),
+        },
+      ).catch(() => {});
       // #endregion
       const mapped: Comment[] = await Promise.all(sorted.map(async (c) => {
         const u = userMap.get(c.userId);
+        const displayName = u?.name || u?.email?.split("@")[0] || "Unknown";
         const displayName = u?.name || u?.email?.split('@')[0] || 'Unknown';
         const profilePicPath = u?.profilePicture;
         const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
@@ -129,6 +243,9 @@ export function SnipeCard({
           id: c.id,
           content: c.content,
           userName: displayName,
+          createdAt: c.createdAt,
+        };
+      });
           userProfilePicture: profilePicUrl,
           createdAt: c.createdAt
         };
@@ -136,7 +253,7 @@ export function SnipeCard({
       setComments(mapped);
       setCommentCount(mapped.length);
     } catch (err) {
-      console.error('Failed to load comments:', err);
+      console.error("Failed to load comments:", err);
     } finally {
       setLoadingComments(false);
     }
@@ -167,6 +284,10 @@ export function SnipeCard({
         const entry: Comment = {
           id: newComment.id,
           content: newComment.content,
+          userName:
+            userMap.get(currentUserId)?.name ||
+            userMap.get(currentUserId)?.email?.split("@")[0] ||
+            "You",
           userName: currentUser?.name || currentUser?.email?.split('@')[0] || 'You',
           userProfilePicture: profilePicUrl,
           createdAt: newComment.createdAt,
@@ -174,9 +295,9 @@ export function SnipeCard({
         setComments((prev) => [...prev, entry]);
         setCommentCount((prev) => (prev ?? 0) + 1);
       }
-      setCommentText('');
+      setCommentText("");
     } catch (err) {
-      console.error('Failed to post comment:', err);
+      console.error("Failed to post comment:", err);
     } finally {
       setSubmitting(false);
     }
@@ -283,7 +404,9 @@ export function SnipeCard({
   };
 
   return (
-    <Animated.View style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View
+      style={[styles.cardOuter, { transform: [{ scale: scaleAnim }] }]}
+    >
       <Pressable
         style={styles.card}
         onPressIn={onPressIn}
@@ -301,10 +424,14 @@ export function SnipeCard({
 
         {imageUrl && (
           <View>
-            <Image source={{ uri: imageUrl }} style={styles.image} resizeMode="cover" />
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.image}
+              resizeMode="cover"
+            />
             {caption && (
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.7)']}
+                colors={["transparent", "rgba(0,0,0,0.7)"]}
                 style={styles.imageGradient}
               />
             )}
@@ -318,6 +445,40 @@ export function SnipeCard({
         )}
       </Pressable>
 
+        <View style={styles.voteRow}>
+          <Pressable
+            style={[
+              styles.voteButton,
+              styles.voteButtonUp,
+              !canVote && styles.voteButtonDisabled,
+            ]}
+            onPress={() => {
+              changeScore(1);
+            }}
+            disabled={!canVote}
+          >
+            <Text style={styles.voteButtonText}>▲ Upvote</Text>
+          </Pressable>
+
+          <View style={styles.voteScoreContainer}>
+            <Text style={styles.voteScoreText}>{localScore}</Text>
+          </View>
+
+          <Pressable
+            style={[
+              styles.voteButton,
+              styles.voteButtonDown,
+              !canVote && styles.voteButtonDisabled,
+            ]}
+            onPress={() => {
+              changeScore(-1);
+            }}
+            disabled={!canVote}
+          >
+            <Text style={styles.voteButtonText}>▼ Downvote</Text>
+          </Pressable>
+        </View>
+      </Pressable>
       <View style={styles.reactionSection}>
         <ReactionBar
           reactions={reactions}
@@ -337,22 +498,36 @@ export function SnipeCard({
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
         <Text style={styles.commentToggleText}>
           {expanded
-            ? 'Hide comments'
+            ? "Hide comments"
             : commentCount != null
-              ? `${commentCount} comment${commentCount !== 1 ? 's' : ''}`
-              : 'Comments'}
+              ? `${commentCount} comment${commentCount !== 1 ? "s" : ""}`
+              : "Comments"}
         </Text>
       </Pressable>
 
       {expanded && (
         <View style={styles.commentsSection}>
           {loadingComments ? (
-            <ActivityIndicator color="#FF3B30" size="small" style={{ paddingVertical: 8 }} />
+            <ActivityIndicator
+              color="#FF3B30"
+              size="small"
+              style={{ paddingVertical: 8 }}
+            />
           ) : comments.length === 0 ? (
-            <Text style={styles.noComments}>No comments yet — be the first to roast!</Text>
+            <Text style={styles.noComments}>
+              No comments yet — be the first to roast!
+            </Text>
           ) : (
             comments.map((c) => (
               <View key={c.id} style={styles.commentRow}>
+                <Text style={styles.commentText}>
+                  <Text style={styles.commentAuthor}>{c.userName}</Text>
+                  {"  "}
+                  {c.content}
+                </Text>
+                <Text style={styles.commentTime}>
+                  {formatTime(c.createdAt)}
+                </Text>
                 {c.userProfilePicture ? (
                   <Image source={{ uri: c.userProfilePicture }} style={styles.commentAvatar} />
                 ) : (
@@ -390,10 +565,13 @@ export function SnipeCard({
               disabled={submitting || !commentText.trim()}
               style={[
                 styles.sendButton,
-                (!commentText.trim() || submitting) && styles.sendButtonDisabled,
+                (!commentText.trim() || submitting) &&
+                  styles.sendButtonDisabled,
               ]}
             >
-              <Text style={styles.sendButtonText}>{submitting ? '...' : 'Send'}</Text>
+              <Text style={styles.sendButtonText}>
+                {submitting ? "..." : "Send"}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -407,20 +585,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    backgroundColor: '#15151B',
+    backgroundColor: "#15151B",
     borderRadius: 18,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    overflow: "hidden",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
     shadowRadius: 12,
     elevation: 8,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 14,
     gap: 8,
@@ -432,48 +610,48 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   sniperAvatarPlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   sniperAvatarInitial: {
     fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.7)',
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.7)",
   },
   names: {
     flex: 1,
     marginRight: 8,
   },
   sniperName: {
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 14,
-    color: '#fff',
+    color: "#fff",
     letterSpacing: 0.3,
   },
   actionText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
   },
   targetName: {
-    fontWeight: '800',
+    fontWeight: "800",
     fontSize: 14,
-    color: '#fff',
+    color: "#fff",
     letterSpacing: 0.3,
   },
   time: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    fontWeight: '500',
+    color: "rgba(255,255,255,0.4)",
+    fontWeight: "500",
     flexShrink: 0,
   },
   image: {
-    width: '100%',
+    width: "100%",
     aspectRatio: 4 / 3,
-    backgroundColor: '#0B0B0F',
+    backgroundColor: "#0B0B0F",
   },
   imageGradient: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -486,22 +664,60 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: 14,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
+  },
+  voteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  voteButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: "center",
+  },
+  voteButtonUp: {
+    backgroundColor: "rgba(76, 217, 100, 0.16)",
+  },
+  voteButtonDown: {
+    backgroundColor: "rgba(255, 59, 48, 0.16)",
+  },
+  voteButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.9)",
+  },
+  voteButtonDisabled: {
+    opacity: 0.4,
+  },
+  voteScoreContainer: {
+    paddingHorizontal: 6,
+    alignItems: "center",
+  },
+  voteScoreText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.8)",
   },
   commentToggle: {
-    backgroundColor: '#15151B',
+    backgroundColor: "#15151B",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: "rgba(255,255,255,0.08)",
   },
   commentToggleText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.45)',
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.45)",
   },
   commentsSection: {
-    backgroundColor: '#111117',
+    backgroundColor: "#111117",
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 18,
     paddingHorizontal: 14,
@@ -509,11 +725,13 @@ const styles = StyleSheet.create({
   },
   noComments: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
+    color: "rgba(255,255,255,0.3)",
     paddingVertical: 10,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   commentRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 6,
@@ -541,37 +759,39 @@ const styles = StyleSheet.create({
   },
   commentText: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
+    color: "rgba(255,255,255,0.75)",
     lineHeight: 18,
   },
   commentAuthor: {
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: "700",
+    color: "#fff",
   },
   commentTime: {
     fontSize: 10,
+    color: "rgba(255,255,255,0.3)",
+    flexShrink: 0,
     color: 'rgba(255,255,255,0.3)',
   },
   commentInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginTop: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: "rgba(255,255,255,0.08)",
     paddingTop: 8,
   },
   commentInput: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
     fontSize: 13,
-    color: '#fff',
+    color: "#fff",
   },
   sendButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: "#FF3B30",
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -581,8 +801,8 @@ const styles = StyleSheet.create({
   },
   sendButtonText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: "700",
+    color: "#fff",
   },
   reactionSection: {
     backgroundColor: '#15151B',

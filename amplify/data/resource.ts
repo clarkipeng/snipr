@@ -31,6 +31,7 @@ const schema = a.schema({
       groupMemberships: a.hasMany("GroupMember", "userId"),
       messages: a.hasMany("Message", "senderId"),
       snipeComments: a.hasMany("SnipeComment", "userId"),
+      snipeVotes: a.hasMany("SnipeVote", "userId"),
       snipeReactions: a.hasMany("SnipeReaction", "userId"),
       badges: a.hasMany("UserBadge", "userId"),
     })
@@ -68,6 +69,7 @@ const schema = a.schema({
       target: a.belongsTo("UserProfile", "targetId"),
       messages: a.hasMany("Message", "snipeId"),
       comments: a.hasMany("SnipeComment", "snipeId"),
+      votes: a.hasMany("SnipeVote", "snipeId"),
       reactions: a.hasMany("SnipeReaction", "snipeId"),
     })
     .authorization((allow) => [
@@ -196,6 +198,7 @@ const schema = a.schema({
     .arguments({
       snipeId: a.id().required(),
       delta: a.integer().required(),
+      userProfileId: a.id(),
     })
     .returns(a.ref("Snipe"))
     .handler(a.handler.function(updateSnipeScoreFunction))

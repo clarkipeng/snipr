@@ -165,6 +165,7 @@ const schema = a.schema({
     .arguments({
       snipeId: a.id().required(),
       delta: a.integer().required(),
+      userProfileId: a.id(),
     })
     .returns(a.ref("Snipe"))
     .handler(a.handler.function(updateSnipeScoreFunction))

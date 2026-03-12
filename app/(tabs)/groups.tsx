@@ -21,11 +21,14 @@ type FeedItem = {
   createdAt: string;
   snipeData?: {
     snipeId: string;
+    sniperId: string;
+    targetId: string;
     sniperName: string;
     targetName: string;
     sniperProfilePictureUrl: string | null;
     imageUrl: string | null;
     caption: string | null;
+    score: number | null;
   };
 };
 
@@ -228,11 +231,14 @@ export default function GroupsScreen() {
 
               snipeData = {
                 snipeId: snipe.id,
+                sniperId: snipe.sniperId,
+                targetId: snipe.targetId,
                 sniperName: sniper?.name ?? 'Unknown',
                 targetName: target?.name ?? 'Unknown',
                 sniperProfilePictureUrl,
                 imageUrl,
-                caption: snipe.caption ?? null
+                caption: snipe.caption ?? null,
+                score: typeof snipe.score === 'number' ? snipe.score : null,
               };
             }
           }
@@ -534,6 +540,8 @@ export default function GroupsScreen() {
                     return (
                       <SnipeCard
                         snipeId={item.snipeData.snipeId}
+                        sniperId={item.snipeData.sniperId}
+                        targetId={item.snipeData.targetId}
                         sniperName={item.snipeData.sniperName}
                         targetName={item.snipeData.targetName}
                         sniperProfilePictureUrl={item.snipeData.sniperProfilePictureUrl}

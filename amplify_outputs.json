@@ -1376,6 +1376,12 @@
               "isArray": false,
               "type": "Int",
               "isRequired": true
+            },
+            "userProfileId": {
+              "name": "userProfileId",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": false
             }
           }
         }

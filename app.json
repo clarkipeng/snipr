@@ -51,7 +51,8 @@
         {
           "cameraPermission": "Allow Snipr to access your camera to snip targets."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

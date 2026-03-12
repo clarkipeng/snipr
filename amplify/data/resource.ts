@@ -1,12 +1,13 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
-import { acceptFriendRequestFunction } from '../functions/accept-friend-request/resource';
-import { createSnipeFunction } from '../functions/create-snipe/resource';
-import { searchUsersFunction } from '../functions/search-users/resource';
+import { type ClientSchema, a, defineData } from "@aws-amplify/backend";
+import { acceptFriendRequestFunction } from "../functions/accept-friend-request/resource";
+import { createSnipeFunction } from "../functions/create-snipe/resource";
+import { searchUsersFunction } from "../functions/search-users/resource";
+import { updateSnipeScoreFunction } from "../functions/update-snipe-score/resource";
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any unauthenticated user can "create", "read", "update", 
+specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
@@ -20,44 +21,41 @@ const schema = a.schema({
       currentStreak: a.integer().default(0),
       longestStreak: a.integer().default(0),
       lastSnipeDate: a.date(),
-      friends: a.hasMany('Friendship', 'userId'),
-      friendOf: a.hasMany('Friendship', 'friendId'),
-      sentRequests: a.hasMany('FriendRequest', 'senderId'),
-      receivedRequests: a.hasMany('FriendRequest', 'receiverId'),
-      snipesMade: a.hasMany('Snipe', 'sniperId'),
-      snipesReceived: a.hasMany('Snipe', 'targetId'),
-      groupMemberships: a.hasMany('GroupMember', 'userId'),
-      messages: a.hasMany('Message', 'senderId'),
-      snipeComments: a.hasMany('SnipeComment', 'userId'),
-      snipeReactions: a.hasMany('SnipeReaction', 'userId'),
-      badges: a.hasMany('UserBadge', 'userId'),
+      expoPushToken: a.string(),
+      friends: a.hasMany("Friendship", "userId"),
+      friendOf: a.hasMany("Friendship", "friendId"),
+      sentRequests: a.hasMany("FriendRequest", "senderId"),
+      receivedRequests: a.hasMany("FriendRequest", "receiverId"),
+      snipesMade: a.hasMany("Snipe", "sniperId"),
+      snipesReceived: a.hasMany("Snipe", "targetId"),
+      groupMemberships: a.hasMany("GroupMember", "userId"),
+      messages: a.hasMany("Message", "senderId"),
+      snipeComments: a.hasMany("SnipeComment", "userId"),
+      snipeReactions: a.hasMany("SnipeReaction", "userId"),
+      badges: a.hasMany("UserBadge", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
-      allow.authenticated().to(['read']),
+      allow.authenticated().to(["read"]),
     ]),
 
   Friendship: a
     .model({
       userId: a.id().required(),
       friendId: a.string().required(),
-      user: a.belongsTo('UserProfile', 'userId'),
-      friend: a.belongsTo('UserProfile', 'friendId'),
+      user: a.belongsTo("UserProfile", "userId"),
+      friend: a.belongsTo("UserProfile", "friendId"),
     })
-    .authorization((allow) => [
-      allow.authenticated(),
-    ]),
+    .authorization((allow) => [allow.authenticated()]),
 
   FriendRequest: a
     .model({
       senderId: a.id().required(),
       receiverId: a.id().required(),
-      sender: a.belongsTo('UserProfile', 'senderId'),
-      receiver: a.belongsTo('UserProfile', 'receiverId'),
+      sender: a.belongsTo("UserProfile", "senderId"),
+      receiver: a.belongsTo("UserProfile", "receiverId"),
     })
-    .authorization((allow) => [
-      allow.authenticated(),
-    ]),
+    .authorization((allow) => [allow.authenticated()]),
 
   Snipe: a
     .model({
@@ -65,15 +63,16 @@ const schema = a.schema({
       targetId: a.id().required(),
       imageKey: a.string().required(),
       caption: a.string(),
-      sniper: a.belongsTo('UserProfile', 'sniperId'),
-      target: a.belongsTo('UserProfile', 'targetId'),
-      messages: a.hasMany('Message', 'snipeId'),
-      comments: a.hasMany('SnipeComment', 'snipeId'),
-      reactions: a.hasMany('SnipeReaction', 'snipeId'),
+      score: a.integer(), // net score = upvotes - downvotes
+      sniper: a.belongsTo("UserProfile", "sniperId"),
+      target: a.belongsTo("UserProfile", "targetId"),
+      messages: a.hasMany("Message", "snipeId"),
+      comments: a.hasMany("SnipeComment", "snipeId"),
+      reactions: a.hasMany("SnipeReaction", "snipeId"),
     })
     .authorization((allow) => [
       allow.owner(),
-      allow.authenticated().to(['read']),
+      allow.authenticated().to(["read"]),
     ]),
 
   SnipeComment: a
@@ -81,12 +80,12 @@ const schema = a.schema({
       snipeId: a.id().required(),
       userId: a.id().required(),
       content: a.string().required(),
-      snipe: a.belongsTo('Snipe', 'snipeId'),
-      user: a.belongsTo('UserProfile', 'userId'),
+      snipe: a.belongsTo("Snipe", "snipeId"),
+      user: a.belongsTo("UserProfile", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
-      allow.authenticated().to(['read', 'create']),
+      allow.authenticated().to(["read", "create"]),
     ]),
 
   SnipeReaction: a
@@ -94,12 +93,12 @@ const schema = a.schema({
       snipeId: a.id().required(),
       userId: a.id().required(),
       emoji: a.string().required(),
-      snipe: a.belongsTo('Snipe', 'snipeId'),
-      user: a.belongsTo('UserProfile', 'userId'),
+      snipe: a.belongsTo("Snipe", "snipeId"),
+      user: a.belongsTo("UserProfile", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
-      allow.authenticated().to(['read', 'create', 'delete']),
+      allow.authenticated().to(["read", "create", "delete"]),
     ]),
 
   UserBadge: a
@@ -107,20 +106,30 @@ const schema = a.schema({
       userId: a.id().required(),
       badgeType: a.string().required(),
       awardedAt: a.datetime().required(),
-      user: a.belongsTo('UserProfile', 'userId'),
+      user: a.belongsTo("UserProfile", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
-      allow.authenticated().to(['read']),
+      allow.authenticated().to(["read"]),
     ]),
+
+  SnipeVote: a
+    .model({
+      snipeId: a.id().required(),
+      userId: a.id().required(),
+      value: a.integer().required(), // +1 for upvote, -1 for downvote
+      snipe: a.belongsTo("Snipe", "snipeId"),
+      user: a.belongsTo("UserProfile", "userId"),
+    })
+    .authorization((allow) => [allow.authenticated()]),
 
   Group: a
     .model({
       name: a.string().required(),
       description: a.string(),
       createdBy: a.id().required(),
-      members: a.hasMany('GroupMember', 'groupId'),
-      messages: a.hasMany('Message', 'groupId'),
+      members: a.hasMany("GroupMember", "groupId"),
+      messages: a.hasMany("Message", "groupId"),
     })
     .authorization((allow) => [allow.authenticated()]),
 
@@ -128,8 +137,8 @@ const schema = a.schema({
     .model({
       groupId: a.id().required(),
       userId: a.id().required(),
-      group: a.belongsTo('Group', 'groupId'),
-      user: a.belongsTo('UserProfile', 'userId'),
+      group: a.belongsTo("Group", "groupId"),
+      user: a.belongsTo("UserProfile", "userId"),
     })
     .authorization((allow) => [allow.authenticated()]),
 
@@ -140,9 +149,9 @@ const schema = a.schema({
       content: a.string(),
       snipeId: a.id(),
       isSystemMessage: a.boolean(),
-      group: a.belongsTo('Group', 'groupId'),
-      sender: a.belongsTo('UserProfile', 'senderId'),
-      snipe: a.belongsTo('Snipe', 'snipeId'),
+      group: a.belongsTo("Group", "groupId"),
+      sender: a.belongsTo("UserProfile", "senderId"),
+      snipe: a.belongsTo("Snipe", "snipeId"),
     })
     .authorization((allow) => [allow.authenticated()]),
 
@@ -154,20 +163,22 @@ const schema = a.schema({
   }),
 
   SearchUsersResponse: a.customType({
-    users: a.ref('SearchUserResult').array(),
+    users: a.ref("SearchUserResult").array(),
   }),
 
-  submitSnipe: a.mutation()
+  submitSnipe: a
+    .mutation()
     .arguments({
       targetId: a.id().required(),
       imageKey: a.string().required(),
       caption: a.string(),
     })
-    .returns(a.ref('Snipe'))
+    .returns(a.ref("Snipe"))
     .handler(a.handler.function(createSnipeFunction))
     .authorization((allow) => [allow.authenticated()]),
 
-  acceptFriendRequest: a.mutation()
+  acceptFriendRequest: a
+    .mutation()
     .arguments({ requestId: a.id().required() })
     .returns(a.boolean())
     .handler(a.handler.function(acceptFriendRequestFunction))
@@ -176,8 +187,18 @@ const schema = a.schema({
   searchUsers: a
     .query()
     .arguments({ query: a.string().required() })
-    .returns(a.ref('SearchUsersResponse'))
+    .returns(a.ref("SearchUsersResponse"))
     .handler(a.handler.function(searchUsersFunction))
+    .authorization((allow) => [allow.authenticated()]),
+
+  updateSnipeScore: a
+    .mutation()
+    .arguments({
+      snipeId: a.id().required(),
+      delta: a.integer().required(),
+    })
+    .returns(a.ref("Snipe"))
+    .handler(a.handler.function(updateSnipeScoreFunction))
     .authorization((allow) => [allow.authenticated()]),
 });
 
@@ -186,7 +207,7 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'userPool',
+    defaultAuthorizationMode: "userPool",
   },
 });
 

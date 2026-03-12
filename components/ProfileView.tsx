@@ -31,7 +31,7 @@ type ProfileData = {
   recentSnipeUrls: string[];
   topSnipers: {
     user: Schema['UserProfile']['type'];
-    count: number;
+    score: number;
   }[];
 };
 
@@ -111,18 +111,22 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           ? await getCachedUrl(targetProfile.profilePicture)
           : null;
 
-        const receivedFromCounts = new Map<string, number>();
+        const receivedFromScores = new Map<string, number>();
         received.forEach(s => {
-          receivedFromCounts.set(s.sniperId, (receivedFromCounts.get(s.sniperId) || 0) + 1);
+          const snipeScore = typeof s.score === 'number' ? s.score : 0;
+          receivedFromScores.set(
+            s.sniperId,
+            (receivedFromScores.get(s.sniperId) || 0) + snipeScore,
+          );
         });
 
-        const topSnipers = Array.from(receivedFromCounts.entries())
-          .map(([sniperId, count]) => ({
+        const topSnipers = Array.from(receivedFromScores.entries())
+          .map(([sniperId, score]) => ({
             user: userMap.get(sniperId)!,
-            count,
+            score,
           }))
           .filter(item => item.user)
-          .sort((a, b) => b.count - a.count)
+          .sort((a, b) => b.score - a.score)
           .slice(0, 5);
 
         setProfile({
@@ -536,7 +540,7 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
                     <Text style={styles.topSniperName} numberOfLines={1}>{item.user.name}</Text>
                   </View>
                   <View style={styles.topSniperScoreBadge}>
-                    <Text style={styles.topSniperScore}>{item.count}</Text>
+                    <Text style={styles.topSniperScore}>{item.score}</Text>
                   </View>
                 </View>
               ))}

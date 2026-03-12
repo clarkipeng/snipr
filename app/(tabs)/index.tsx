@@ -21,6 +21,7 @@ type FeedItem = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
+  score: number | null;
 };
 
 export default function HomeScreen() {
@@ -53,7 +54,7 @@ export default function HomeScreen() {
       });
 
       const { data: snipes } = await client.models.Snipe.list({
-        selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'createdAt'],
+        selectionSet: ['id', 'sniperId', 'targetId', 'imageKey', 'caption', 'score', 'createdAt'],
         limit: 1000
       });
 
@@ -87,6 +88,7 @@ export default function HomeScreen() {
             imageUrl,
             caption: snipe.caption ?? null,
             createdAt: snipe.createdAt,
+            score: typeof snipe.score === 'number' ? snipe.score : null,
           };
         })
       );
@@ -150,6 +152,7 @@ export default function HomeScreen() {
             imageUrl={item.imageUrl}
             caption={item.caption}
             createdAt={item.createdAt}
+            score={item.score}
             currentUserId={currentUserId}
             userMap={userMap}
           />

@@ -1,5 +1,6 @@
 import type { Schema } from '@/amplify/data/resource';
 import { getCachedUrl } from '@/utils/url-cache';
+import { BADGE_INFO, type BadgeType, getUserBadges } from '@/utils/badge-checker';
 import { useAuthenticator } from '@aws-amplify/ui-react-native';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { generateClient } from 'aws-amplify/data';
@@ -20,9 +21,13 @@ const client = generateClient<Schema>();
 type ProfileData = {
   name: string;
   email: string;
+  bio: string | null;
+  status: string | null;
   profilePictureUrl: string | null;
   snipesMade: number;
   snipesReceived: number;
+  currentStreak: number;
+  longestStreak: number;
   recentSnipeUrls: string[];
   topSnipers: {
     user: Schema['UserProfile']['type'];
@@ -48,6 +53,13 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [savingName, setSavingName] = useState(false);
+  const [editingBio, setEditingBio] = useState(false);
+  const [bioInput, setBioInput] = useState('');
+  const [savingBio, setSavingBio] = useState(false);
+  const [editingStatus, setEditingStatus] = useState(false);
+  const [statusInput, setStatusInput] = useState('');
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [badges, setBadges] = useState<Array<{ badgeType: BadgeType; awardedAt: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,9 +132,13 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
         setProfile({
           name: targetProfile.name,
           email: targetProfile.email,
+          bio: targetProfile.bio ?? null,
+          status: targetProfile.status ?? null,
           profilePictureUrl,
           snipesMade: made.length,
           snipesReceived: received.length,
+          currentStreak: targetProfile.currentStreak || 0,
+          longestStreak: targetProfile.longestStreak || 0,
           recentSnipeUrls: [],
           topSnipers,
         });
@@ -137,6 +153,14 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
 
         if (!cancelled) {
           setProfile(prev => prev ? { ...prev, recentSnipeUrls: urls } : prev);
+        }
+
+        // Load badges
+        if (targetProfile.id) {
+          const userBadges = await getUserBadges(targetProfile.id);
+          if (!cancelled) {
+            setBadges(userBadges);
+          }
         }
       } catch (err) {
         console.error('Failed to load profile:', err);
@@ -177,6 +201,47 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
       console.error('Failed to update name:', err);
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const saveBio = async () => {
+    if (!profileId) return;
+    const trimmed = bioInput.trim();
+    setSavingBio(true);
+    try {
+      console.log('[ProfileView] Saving bio:', { profileId, bio: trimmed });
+      const result = await client.models.UserProfile.update({ id: profileId, bio: trimmed || null });
+      console.log('[ProfileView] Bio saved successfully:', result);
+      setProfile(prev => prev ? { ...prev, bio: trimmed || null } : prev);
+      setEditingBio(false);
+    } catch (err) {
+      console.error('[ProfileView] Failed to update bio:', err);
+      console.error('[ProfileView] Error details:', JSON.stringify(err, null, 2));
+    } finally {
+      setSavingBio(false);
+    }
+  };
+
+  const saveStatus = async () => {
+    console.log('[ProfileView] saveStatus called');
+    if (!profileId) {
+      console.log('[ProfileView] No profileId, aborting');
+      return;
+    }
+    const trimmed = statusInput.trim();
+    console.log('[ProfileView] Trimmed status:', trimmed);
+    setSavingStatus(true);
+    try {
+      console.log('[ProfileView] Saving status:', { profileId, status: trimmed });
+      const result = await client.models.UserProfile.update({ id: profileId, status: trimmed || null });
+      console.log('[ProfileView] Status saved successfully:', result);
+      setProfile(prev => prev ? { ...prev, status: trimmed || null } : prev);
+      setEditingStatus(false);
+    } catch (err) {
+      console.error('[ProfileView] Failed to update status:', err);
+      console.error('[ProfileView] Error details:', JSON.stringify(err, null, 2));
+    } finally {
+      setSavingStatus(false);
     }
   };
 
@@ -246,6 +311,161 @@ export function ProfileView({ userId, showSignOut = false }: ProfileViewProps) {
           </TouchableOpacity>
         )}
         <Text style={styles.email}>{profile.email}</Text>
+
+        {badges.length > 0 && (
+          <View style={styles.badgesContainer}>
+            {badges.map((badge) => {
+              const info = BADGE_INFO[badge.badgeType];
+              return (
+                <View key={badge.badgeType} style={styles.badge}>
+                  <Text style={styles.badgeEmoji}>{info.emoji}</Text>
+                  <View style={styles.badgeTextContainer}>
+                    <Text style={styles.badgeName}>{info.name}</Text>
+                    <Text style={styles.badgeDescription}>{info.description}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <View style={styles.streakContainer}>
+          <View style={styles.streakCard}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <View style={styles.streakInfo}>
+              <Text style={styles.streakNumber}>{profile.currentStreak}</Text>
+              <Text style={styles.streakLabel}>Day Streak</Text>
+            </View>
+          </View>
+          <View style={styles.streakDivider} />
+          <View style={styles.streakCard}>
+            <Text style={styles.streakEmoji}>⭐</Text>
+            <View style={styles.streakInfo}>
+              <Text style={styles.streakNumber}>{profile.longestStreak}</Text>
+              <Text style={styles.streakLabel}>Best Streak</Text>
+            </View>
+          </View>
+        </View>
+
+        {editingStatus ? (
+          <View style={styles.editStatusContainer}>
+            <TextInput
+              style={styles.statusInput}
+              value={statusInput}
+              onChangeText={setStatusInput}
+              autoFocus
+              placeholder="What's on your mind?"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              maxLength={100}
+            />
+            <View style={styles.statusButtonRow}>
+              <TouchableOpacity
+                onPress={saveStatus}
+                disabled={savingStatus}
+                style={styles.saveBtnLarge}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.saveBtnLargeText}>{savingStatus ? 'Saving...' : 'Save'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setEditingStatus(false)}
+                style={styles.cancelBtnLarge}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnLargeText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <>
+            {profile.status && (
+              <View style={styles.statusContainer}>
+                <Text style={styles.statusEmoji}>💭</Text>
+                <Text style={styles.statusText}>{profile.status}</Text>
+                {friendStatus === 'self' && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setStatusInput(profile.status ?? '');
+                      setEditingStatus(true);
+                    }}
+                    style={styles.editIcon}
+                  >
+                    <Text style={styles.editIconText}>✏️</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            {!profile.status && friendStatus === 'self' && (
+              <TouchableOpacity
+                onPress={() => {
+                  setStatusInput('');
+                  setEditingStatus(true);
+                }}
+                style={styles.addStatusBtn}
+              >
+                <Text style={styles.addStatusText}>+ Add status</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+
+        {editingBio ? (
+          <View style={styles.editBioContainer}>
+            <TextInput
+              style={styles.bioInput}
+              value={bioInput}
+              onChangeText={setBioInput}
+              autoFocus
+              placeholder="Tell everyone about yourself..."
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              multiline
+              numberOfLines={4}
+              maxLength={200}
+              editable={!savingBio}
+            />
+            <View style={styles.bioActions}>
+              <TouchableOpacity onPress={saveBio} disabled={savingBio} style={styles.saveBioBtn}>
+                <Text style={styles.saveBioBtnText}>{savingBio ? 'Saving...' : 'Save Bio'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setEditingBio(false)} style={styles.cancelBioBtn}>
+                <Text style={styles.cancelBioBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <>
+            {profile.bio && (
+              <View style={styles.bioWrapper}>
+                <View style={styles.bioContainer}>
+                  <Text style={styles.bioText}>{profile.bio}</Text>
+                </View>
+                {friendStatus === 'self' && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setBioInput(profile.bio ?? '');
+                      setEditingBio(true);
+                    }}
+                    style={styles.editBioIcon}
+                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                  >
+                    <Text style={styles.editIconText}>✏️</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            {!profile.bio && friendStatus === 'self' && (
+              <TouchableOpacity
+                onPress={() => {
+                  setBioInput('');
+                  setEditingBio(true);
+                }}
+                style={styles.addBioBtn}
+              >
+                <Text style={styles.addBioText}>+ Add bio</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
 
         {friendStatus === 'friends' && (
           <View style={[styles.friendButton, styles.friendButtonFriends]}>
@@ -550,5 +770,243 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 14,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 12,
+    gap: 8,
+  },
+  statusEmoji: {
+    fontSize: 16,
+  },
+  statusText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  editIcon: {
+    padding: 4,
+  },
+  editIconText: {
+    fontSize: 14,
+  },
+  addStatusBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderStyle: 'dashed',
+    marginBottom: 12,
+  },
+  addStatusText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  editStatusContainer: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    width: '100%',
+  },
+  statusInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#fff',
+    marginBottom: 12,
+  },
+  statusButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  saveBtnLarge: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnLargeText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelBtnLarge: {
+    flex: 1,
+    backgroundColor: 'rgba(255,59,48,0.2)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnLargeText: {
+    color: '#FF3B30',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bioWrapper: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  bioContainer: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+    borderRadius: 16,
+  },
+  bioText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  editBioIcon: {
+    alignSelf: 'flex-end',
+    marginTop: 6,
+    marginRight: 4,
+    padding: 4,
+  },
+  addBioBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderStyle: 'dashed',
+    marginBottom: 16,
+  },
+  addBioText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  editBioContainer: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    width: '100%',
+  },
+  bioInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: '#fff',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  bioActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  saveBioBtn: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  saveBioBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  cancelBioBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255,59,48,0.2)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  cancelBioBtnText: {
+    color: '#FF3B30',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  badgesContainer: {
+    width: '100%',
+    gap: 8,
+    marginBottom: 20,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,215,0,0.2)',
+  },
+  badgeEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  badgeTextContainer: {
+    flex: 1,
+  },
+  badgeName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFD700',
+    marginBottom: 2,
+  },
+  badgeDescription: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  streakContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#15151B',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    width: '100%',
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  streakCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  streakEmoji: {
+    fontSize: 28,
+  },
+  streakInfo: {
+    alignItems: 'flex-start',
+  },
+  streakNumber: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FF3B30',
+    lineHeight: 26,
+  },
+  streakLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+  },
+  streakDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
 });

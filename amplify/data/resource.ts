@@ -7,7 +7,7 @@ import { updateSnipeScoreFunction } from "../functions/update-snipe-score/resour
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any unauthenticated user can "create", "read", "update", 
+specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
@@ -16,6 +16,11 @@ const schema = a.schema({
       name: a.string().required(),
       email: a.string().required(),
       profilePicture: a.string(),
+      bio: a.string(),
+      status: a.string(),
+      currentStreak: a.integer().default(0),
+      longestStreak: a.integer().default(0),
+      lastSnipeDate: a.date(),
       expoPushToken: a.string(),
       friends: a.hasMany("Friendship", "userId"),
       friendOf: a.hasMany("Friendship", "friendId"),
@@ -27,6 +32,8 @@ const schema = a.schema({
       messages: a.hasMany("Message", "senderId"),
       snipeComments: a.hasMany("SnipeComment", "userId"),
       snipeVotes: a.hasMany("SnipeVote", "userId"),
+      snipeReactions: a.hasMany("SnipeReaction", "userId"),
+      badges: a.hasMany("UserBadge", "userId"),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -63,6 +70,7 @@ const schema = a.schema({
       messages: a.hasMany("Message", "snipeId"),
       comments: a.hasMany("SnipeComment", "snipeId"),
       votes: a.hasMany("SnipeVote", "snipeId"),
+      reactions: a.hasMany("SnipeReaction", "snipeId"),
     })
     .authorization((allow) => [
       allow.owner(),
@@ -80,6 +88,31 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.owner(),
       allow.authenticated().to(["read", "create"]),
+    ]),
+
+  SnipeReaction: a
+    .model({
+      snipeId: a.id().required(),
+      userId: a.id().required(),
+      emoji: a.string().required(),
+      snipe: a.belongsTo("Snipe", "snipeId"),
+      user: a.belongsTo("UserProfile", "userId"),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(["read", "create", "delete"]),
+    ]),
+
+  UserBadge: a
+    .model({
+      userId: a.id().required(),
+      badgeType: a.string().required(),
+      awardedAt: a.datetime().required(),
+      user: a.belongsTo("UserProfile", "userId"),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+      allow.authenticated().to(["read"]),
     ]),
 
   SnipeVote: a

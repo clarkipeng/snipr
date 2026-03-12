@@ -2,6 +2,11 @@ import type { Schema } from "@/amplify/data/resource";
 import { generateClient } from "aws-amplify/data";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Schema } from '@/amplify/data/resource';
+import { getCachedUrl } from '@/utils/url-cache';
+import { LinearGradient } from 'expo-linear-gradient';
+import { generateClient } from 'aws-amplify/data';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -12,6 +17,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+} from 'react-native';
+import { ReactionPicker } from './ReactionPicker';
+import { ReactionBar } from './ReactionBar';
 
 const client = generateClient<Schema>();
 
@@ -19,7 +27,15 @@ type Comment = {
   id: string;
   content: string;
   userName: string;
+  userProfilePicture: string | null;
   createdAt: string;
+};
+
+type Reaction = {
+  emoji: string;
+  count: number;
+  userIds: string[];
+  hasReacted: boolean;
 };
 
 type SnipeCardProps = {
@@ -32,11 +48,11 @@ type SnipeCardProps = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
-  score?: number | null;
   currentUserId: string | null;
   userMap: Map<string, { id: string; name: string; email?: string }>;
   initialHasVoted?: boolean;
   onScoreChange?: (snipeId: string, newScore: number) => void;
+  userMap: Map<string, { id: string; name: string; email?: string; profilePicture?: string | null }>;
 };
 
 function formatTime(dateStr: string) {
@@ -73,7 +89,6 @@ export function SnipeCard({
   imageUrl,
   caption,
   createdAt,
-  score,
   currentUserId,
   userMap,
   initialHasVoted,
@@ -160,6 +175,9 @@ export function SnipeCard({
       setUpdatingScore(false);
     }
   };
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [loadingReactions, setLoadingReactions] = useState(false);
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -215,9 +233,12 @@ export function SnipeCard({
         },
       ).catch(() => {});
       // #endregion
-      const mapped: Comment[] = sorted.map((c) => {
+      const mapped: Comment[] = await Promise.all(sorted.map(async (c) => {
         const u = userMap.get(c.userId);
         const displayName = u?.name || u?.email?.split("@")[0] || "Unknown";
+        const displayName = u?.name || u?.email?.split('@')[0] || 'Unknown';
+        const profilePicPath = u?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
         return {
           id: c.id,
           content: c.content,
@@ -225,6 +246,10 @@ export function SnipeCard({
           createdAt: c.createdAt,
         };
       });
+          userProfilePicture: profilePicUrl,
+          createdAt: c.createdAt
+        };
+      }));
       setComments(mapped);
       setCommentCount(mapped.length);
     } catch (err) {
@@ -252,6 +277,10 @@ export function SnipeCard({
         content: text,
       });
       if (newComment) {
+        const currentUser = userMap.get(currentUserId);
+        const profilePicPath = currentUser?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+
         const entry: Comment = {
           id: newComment.id,
           content: newComment.content,
@@ -259,6 +288,8 @@ export function SnipeCard({
             userMap.get(currentUserId)?.name ||
             userMap.get(currentUserId)?.email?.split("@")[0] ||
             "You",
+          userName: currentUser?.name || currentUser?.email?.split('@')[0] || 'You',
+          userProfilePicture: profilePicUrl,
           createdAt: newComment.createdAt,
         };
         setComments((prev) => [...prev, entry]);
@@ -269,6 +300,106 @@ export function SnipeCard({
       console.error("Failed to post comment:", err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const loadReactions = useCallback(async () => {
+    setLoadingReactions(true);
+    try {
+      const { data } = await client.models.SnipeReaction.list({
+        filter: { snipeId: { eq: snipeId } },
+        limit: 100,
+      });
+
+      const grouped = new Map<string, { userIds: string[]; reactionIds: string[] }>();
+      data.forEach((r) => {
+        if (!grouped.has(r.emoji)) {
+          grouped.set(r.emoji, { userIds: [], reactionIds: [] });
+        }
+        grouped.get(r.emoji)!.userIds.push(r.userId);
+        grouped.get(r.emoji)!.reactionIds.push(r.id);
+      });
+
+      const mapped: Reaction[] = Array.from(grouped.entries()).map(([emoji, info]) => ({
+        emoji,
+        count: info.userIds.length,
+        userIds: info.userIds,
+        hasReacted: currentUserId ? info.userIds.includes(currentUserId) : false,
+      }));
+
+      setReactions(mapped);
+    } catch (err) {
+      console.error('Failed to load reactions:', err);
+    } finally {
+      setLoadingReactions(false);
+    }
+  }, [snipeId, currentUserId]);
+
+  useEffect(() => {
+    loadReactions();
+  }, [loadReactions]);
+
+  const handleReactionSelect = async (emoji: string) => {
+    if (!currentUserId) return;
+    setShowReactionPicker(false);
+
+    const existingReaction = reactions.find((r) => r.emoji === emoji && r.hasReacted);
+
+    if (existingReaction) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
+    }
+  };
+
+  const handleReactionPress = async (emoji: string) => {
+    if (!currentUserId) return;
+
+    const reaction = reactions.find((r) => r.emoji === emoji);
+    if (!reaction) return;
+
+    if (reaction.hasReacted) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
     }
   };
 
@@ -312,6 +443,7 @@ export function SnipeCard({
             <Text style={styles.caption}>{caption}</Text>
           </View>
         )}
+      </Pressable>
 
         <View style={styles.voteRow}>
           <Pressable
@@ -347,6 +479,21 @@ export function SnipeCard({
           </Pressable>
         </View>
       </Pressable>
+      <View style={styles.reactionSection}>
+        <ReactionBar
+          reactions={reactions}
+          onReactionPress={handleReactionPress}
+          onAddPress={() => setShowReactionPicker(!showReactionPicker)}
+        />
+        {showReactionPicker && (
+          <View style={styles.reactionPickerContainer}>
+            <ReactionPicker
+              visible={showReactionPicker}
+              onReactionSelect={handleReactionSelect}
+            />
+          </View>
+        )}
+      </View>
 
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
         <Text style={styles.commentToggleText}>
@@ -381,6 +528,23 @@ export function SnipeCard({
                 <Text style={styles.commentTime}>
                   {formatTime(c.createdAt)}
                 </Text>
+                {c.userProfilePicture ? (
+                  <Image source={{ uri: c.userProfilePicture }} style={styles.commentAvatar} />
+                ) : (
+                  <View style={[styles.commentAvatar, styles.commentAvatarPlaceholder]}>
+                    <Text style={styles.commentAvatarInitial}>
+                      {c.userName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.commentContent}>
+                  <Text style={styles.commentText}>
+                    <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    {'  '}
+                    {c.content}
+                  </Text>
+                  <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                </View>
               </View>
             ))
           )}
@@ -568,11 +732,32 @@ const styles = StyleSheet.create({
   commentRow: {
     flexDirection: "row",
     alignItems: "baseline",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingVertical: 6,
-    gap: 8,
+    gap: 10,
+  },
+  commentAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 2,
+  },
+  commentAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentAvatarInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  commentContent: {
+    flex: 1,
+    gap: 2,
   },
   commentText: {
-    flex: 1,
     fontSize: 13,
     color: "rgba(255,255,255,0.75)",
     lineHeight: 18,
@@ -585,6 +770,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "rgba(255,255,255,0.3)",
     flexShrink: 0,
+    color: 'rgba(255,255,255,0.3)',
   },
   commentInputRow: {
     flexDirection: "row",
@@ -617,5 +803,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#fff",
+  },
+  reactionSection: {
+    backgroundColor: '#15151B',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
+  },
+  reactionPickerContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
   },
 });

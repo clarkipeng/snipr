@@ -1,4 +1,5 @@
 import type { Schema } from '@/amplify/data/resource';
+import { getCachedUrl } from '@/utils/url-cache';
 import { LinearGradient } from 'expo-linear-gradient';
 import { generateClient } from 'aws-amplify/data';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,6 +13,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ReactionPicker } from './ReactionPicker';
+import { ReactionBar } from './ReactionBar';
 
 const client = generateClient<Schema>();
 
@@ -19,7 +22,15 @@ type Comment = {
   id: string;
   content: string;
   userName: string;
+  userProfilePicture: string | null;
   createdAt: string;
+};
+
+type Reaction = {
+  emoji: string;
+  count: number;
+  userIds: string[];
+  hasReacted: boolean;
 };
 
 type SnipeCardProps = {
@@ -30,9 +41,8 @@ type SnipeCardProps = {
   imageUrl: string | null;
   caption: string | null;
   createdAt: string;
-  score?: number | null;
   currentUserId: string | null;
-  userMap: Map<string, { id: string; name: string; email?: string }>;
+  userMap: Map<string, { id: string; name: string; email?: string; profilePicture?: string | null }>;
 };
 
 function formatTime(dateStr: string) {
@@ -67,7 +77,6 @@ export function SnipeCard({
   imageUrl,
   caption,
   createdAt,
-  score,
   currentUserId,
   userMap,
 }: SnipeCardProps) {
@@ -78,60 +87,9 @@ export function SnipeCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState<number | null>(null);
-  const [localScore, setLocalScore] = useState<number>(typeof score === 'number' ? score : 0);
-  const [updatingScore, setUpdatingScore] = useState(false);
-  const [hasVoted, setHasVoted] = useState(false);
-
-  useEffect(() => {
-    if (typeof score === 'number') {
-      setLocalScore(score);
-    }
-  }, [score]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function checkVote() {
-      if (!currentUserId) return;
-      try {
-        const { data } = await client.models.SnipeVote.list({
-          filter: {
-            snipeId: { eq: snipeId },
-            userId: { eq: currentUserId },
-          },
-          limit: 1,
-        });
-        if (!cancelled && data.length > 0) {
-          setHasVoted(true);
-        }
-      } catch (e) {
-        console.warn('Failed to check vote state:', e);
-      }
-    }
-    checkVote();
-    return () => {
-      cancelled = true;
-    };
-  }, [snipeId, currentUserId]);
-
-  const changeScore = async (delta: number) => {
-    if (updatingScore || hasVoted) return;
-    const next = localScore + delta;
-    setLocalScore(next);
-    try {
-      setUpdatingScore(true);
-      await client.mutations.updateSnipeScore({
-        snipeId,
-        delta,
-      });
-      setHasVoted(true);
-    } catch (e) {
-      console.warn('Failed to update snipe score:', e);
-      // revert optimistic update on failure
-      setLocalScore((prev) => prev - delta);
-    } finally {
-      setUpdatingScore(false);
-    }
-  };
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [loadingReactions, setLoadingReactions] = useState(false);
 
   const onPressIn = () => {
     Animated.spring(scaleAnim, {
@@ -162,11 +120,19 @@ export function SnipeCard({
       // #region agent log
       fetch('http://127.0.0.1:7897/ingest/0e95db31-a5bc-4ad5-9951-34c58685161d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'57a908'},body:JSON.stringify({sessionId:'57a908',location:'SnipeCard.tsx:loadComments',message:'comment data and userMap',data:{comments:sorted.map((c:any)=>({id:c.id,userId:c.userId,content:c.content})),userMapKeys:[...userMap.keys()],userMapSize:userMap.size},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-      const mapped: Comment[] = sorted.map((c) => {
+      const mapped: Comment[] = await Promise.all(sorted.map(async (c) => {
         const u = userMap.get(c.userId);
         const displayName = u?.name || u?.email?.split('@')[0] || 'Unknown';
-        return { id: c.id, content: c.content, userName: displayName, createdAt: c.createdAt };
-      });
+        const profilePicPath = u?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+        return {
+          id: c.id,
+          content: c.content,
+          userName: displayName,
+          userProfilePicture: profilePicUrl,
+          createdAt: c.createdAt
+        };
+      }));
       setComments(mapped);
       setCommentCount(mapped.length);
     } catch (err) {
@@ -194,10 +160,15 @@ export function SnipeCard({
         content: text,
       });
       if (newComment) {
+        const currentUser = userMap.get(currentUserId);
+        const profilePicPath = currentUser?.profilePicture;
+        const profilePicUrl = profilePicPath ? await getCachedUrl(profilePicPath) : null;
+
         const entry: Comment = {
           id: newComment.id,
           content: newComment.content,
-          userName: userMap.get(currentUserId)?.name || userMap.get(currentUserId)?.email?.split('@')[0] || 'You',
+          userName: currentUser?.name || currentUser?.email?.split('@')[0] || 'You',
+          userProfilePicture: profilePicUrl,
           createdAt: newComment.createdAt,
         };
         setComments((prev) => [...prev, entry]);
@@ -208,6 +179,106 @@ export function SnipeCard({
       console.error('Failed to post comment:', err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const loadReactions = useCallback(async () => {
+    setLoadingReactions(true);
+    try {
+      const { data } = await client.models.SnipeReaction.list({
+        filter: { snipeId: { eq: snipeId } },
+        limit: 100,
+      });
+
+      const grouped = new Map<string, { userIds: string[]; reactionIds: string[] }>();
+      data.forEach((r) => {
+        if (!grouped.has(r.emoji)) {
+          grouped.set(r.emoji, { userIds: [], reactionIds: [] });
+        }
+        grouped.get(r.emoji)!.userIds.push(r.userId);
+        grouped.get(r.emoji)!.reactionIds.push(r.id);
+      });
+
+      const mapped: Reaction[] = Array.from(grouped.entries()).map(([emoji, info]) => ({
+        emoji,
+        count: info.userIds.length,
+        userIds: info.userIds,
+        hasReacted: currentUserId ? info.userIds.includes(currentUserId) : false,
+      }));
+
+      setReactions(mapped);
+    } catch (err) {
+      console.error('Failed to load reactions:', err);
+    } finally {
+      setLoadingReactions(false);
+    }
+  }, [snipeId, currentUserId]);
+
+  useEffect(() => {
+    loadReactions();
+  }, [loadReactions]);
+
+  const handleReactionSelect = async (emoji: string) => {
+    if (!currentUserId) return;
+    setShowReactionPicker(false);
+
+    const existingReaction = reactions.find((r) => r.emoji === emoji && r.hasReacted);
+
+    if (existingReaction) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
+    }
+  };
+
+  const handleReactionPress = async (emoji: string) => {
+    if (!currentUserId) return;
+
+    const reaction = reactions.find((r) => r.emoji === emoji);
+    if (!reaction) return;
+
+    if (reaction.hasReacted) {
+      try {
+        const { data: allReactions } = await client.models.SnipeReaction.list({
+          filter: { snipeId: { eq: snipeId }, emoji: { eq: emoji }, userId: { eq: currentUserId } },
+        });
+        if (allReactions.length > 0) {
+          await client.models.SnipeReaction.delete({ id: allReactions[0].id });
+          await loadReactions();
+        }
+      } catch (err) {
+        console.error('Failed to remove reaction:', err);
+      }
+    } else {
+      try {
+        await client.models.SnipeReaction.create({
+          snipeId,
+          userId: currentUserId,
+          emoji,
+        });
+        await loadReactions();
+      } catch (err) {
+        console.error('Failed to add reaction:', err);
+      }
     }
   };
 
@@ -245,43 +316,23 @@ export function SnipeCard({
             <Text style={styles.caption}>{caption}</Text>
           </View>
         )}
-
-        <View style={styles.voteRow}>
-          <Pressable
-            style={[
-              styles.voteButton,
-              styles.voteButtonUp,
-              (hasVoted || updatingScore) && styles.voteButtonDisabled,
-            ]}
-            onPress={() => {
-              changeScore(1);
-            }}
-            disabled={hasVoted || updatingScore}
-          >
-            <Text style={styles.voteButtonText}>▲ Upvote</Text>
-          </Pressable>
-
-          <View style={styles.voteScoreContainer}>
-            <Text style={styles.voteScoreText}>
-              {localScore}
-            </Text>
-          </View>
-
-          <Pressable
-            style={[
-              styles.voteButton,
-              styles.voteButtonDown,
-              (hasVoted || updatingScore) && styles.voteButtonDisabled,
-            ]}
-            onPress={() => {
-              changeScore(-1);
-            }}
-            disabled={hasVoted || updatingScore}
-          >
-            <Text style={styles.voteButtonText}>▼ Downvote</Text>
-          </Pressable>
-        </View>
       </Pressable>
+
+      <View style={styles.reactionSection}>
+        <ReactionBar
+          reactions={reactions}
+          onReactionPress={handleReactionPress}
+          onAddPress={() => setShowReactionPicker(!showReactionPicker)}
+        />
+        {showReactionPicker && (
+          <View style={styles.reactionPickerContainer}>
+            <ReactionPicker
+              visible={showReactionPicker}
+              onReactionSelect={handleReactionSelect}
+            />
+          </View>
+        )}
+      </View>
 
       <Pressable onPress={toggleComments} style={styles.commentToggle}>
         <Text style={styles.commentToggleText}>
@@ -302,12 +353,23 @@ export function SnipeCard({
           ) : (
             comments.map((c) => (
               <View key={c.id} style={styles.commentRow}>
-                <Text style={styles.commentText}>
-                  <Text style={styles.commentAuthor}>{c.userName}</Text>
-                  {'  '}
-                  {c.content}
-                </Text>
-                <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                {c.userProfilePicture ? (
+                  <Image source={{ uri: c.userProfilePicture }} style={styles.commentAvatar} />
+                ) : (
+                  <View style={[styles.commentAvatar, styles.commentAvatarPlaceholder]}>
+                    <Text style={styles.commentAvatarInitial}>
+                      {c.userName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.commentContent}>
+                  <Text style={styles.commentText}>
+                    <Text style={styles.commentAuthor}>{c.userName}</Text>
+                    {'  '}
+                    {c.content}
+                  </Text>
+                  <Text style={styles.commentTime}>{formatTime(c.createdAt)}</Text>
+                </View>
               </View>
             ))
           )}
@@ -426,44 +488,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: 'rgba(255,255,255,0.8)',
   },
-  voteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    gap: 10,
-  },
-  voteButton: {
-    flex: 1,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  voteButtonUp: {
-    backgroundColor: 'rgba(76, 217, 100, 0.16)',
-  },
-  voteButtonDown: {
-    backgroundColor: 'rgba(255, 59, 48, 0.16)',
-  },
-  voteButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
-  },
-  voteButtonDisabled: {
-    opacity: 0.4,
-  },
-  voteScoreContainer: {
-    paddingHorizontal: 6,
-    alignItems: 'center',
-  },
-  voteScoreText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
-  },
   commentToggle: {
     backgroundColor: '#15151B',
     paddingHorizontal: 14,
@@ -491,12 +515,31 @@ const styles = StyleSheet.create({
   },
   commentRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-start',
     paddingVertical: 6,
-    gap: 8,
+    gap: 10,
+  },
+  commentAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 2,
+  },
+  commentAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentAvatarInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  commentContent: {
+    flex: 1,
+    gap: 2,
   },
   commentText: {
-    flex: 1,
     fontSize: 13,
     color: 'rgba(255,255,255,0.75)',
     lineHeight: 18,
@@ -508,7 +551,6 @@ const styles = StyleSheet.create({
   commentTime: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.3)',
-    flexShrink: 0,
   },
   commentInputRow: {
     flexDirection: 'row',
@@ -541,5 +583,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#fff',
+  },
+  reactionSection: {
+    backgroundColor: '#15151B',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
+  },
+  reactionPickerContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
   },
 });
